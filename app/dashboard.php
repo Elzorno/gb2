@@ -5,16 +5,22 @@ require_once __DIR__ . '/../lib/kids.php';
 require_once __DIR__ . '/../lib/rotation.php';
 require_once __DIR__ . '/../lib/bonuses.php';
 require_once __DIR__ . '/../lib/db.php';
+require_once __DIR__ . '/../lib/ui.php';
 
-gb2_kid_require();
-$kid = gb2_kid_current();
+$kid = gb2_kid_require();
 
 $pdo = gb2_pdo();
 $priv = $pdo->prepare("SELECT * FROM privileges WHERE kid_id=?");
-$priv->execute([(int)$kid['id']]);
+$priv->execute([(int)$kid['kid_id']]);
 $pv = $priv->fetch() ?: ['phone_locked'=>0,'games_locked'=>0,'other_locked'=>0,'bank_phone_min'=>0,'bank_games_min'=>0,'bank_other_min'=>0];
 
-$today = gb2_today_assignments();
+$todayStr = (new DateTimeImmutable('today'))->format('Y-m-d');
+$dObj = new DateTimeImmutable($todayStr);
+$today = [];
+if (gb2_is_weekday($dObj)) {
+  gb2_rotation_generate_for_day($todayStr);
+  $today = gb2_assignments_for_kid_day((int)$kid['kid_id'], $todayStr);
+}
 $week = gb2_week_key();
 $bonus = gb2_bonus_instances_for_week($week);
 
