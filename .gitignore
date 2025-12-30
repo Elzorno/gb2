@@ -5,6 +5,16 @@
 *.swp
 *~
 
-# Optional: ignore OS cruft
+# Runtime / environment (NEVER commit)
+data/app.sqlite
+data/config.php
+data/.htaccess
+
+# If you ever add uploads under data/
+data/uploads/
+data/photos/
+data/proofs/
+
+# Optional OS cruft
 .DS_Store
 Thumbs.db
