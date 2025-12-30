@@ -1,0 +1,118 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__ . '/../lib/ui.php';
+require_once __DIR__ . '/../lib/db.php';
+require_once __DIR__ . '/../lib/kids.php';
+require_once __DIR__ . '/../lib/auth.php';
+require_once __DIR__ . '/../lib/audit.php';
+
+gb2_db_init();
+
+$cfgPath = __DIR__ . '/../config.php';
+$cfg = gb2_config();
+$hasAdmin = !empty($cfg['admin_password_hash']);
+
+$note = '';
+$error = '';
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+  gb2_csrf_verify();
+  $action = (string)($_POST['action'] ?? '');
+  if ($action === 'set_admin') {
+    $pw = (string)($_POST['admin_password'] ?? '');
+    if (strlen($pw) < 10) $error = 'Use at least 10 characters.';
+    else {
+      $sample = require __DIR__ . '/../config.sample.php';
+      $sample['admin_password_hash'] = password_hash($pw, PASSWORD_ARGON2ID);
+      if (file_exists($cfgPath)) {
+        $existing = require $cfgPath;
+        $sample['data_dir'] = $existing['data_dir'] ?? $sample['data_dir'];
+      }
+      $export = "<?php\nreturn " . var_export($sample, true) . ";\n";
+      file_put_contents($cfgPath, $export);
+      $note = 'Admin password set. Reload page.';
+      gb2_audit('admin', 0, 'setup_set_admin', []);
+      $hasAdmin = true;
+    }
+  } elseif ($action === 'add_kid') {
+    gb2_admin_require();
+    $name = trim((string)($_POST['kid_name'] ?? ''));
+    $pin = trim((string)($_POST['kid_pin'] ?? ''));
+    if ($name === '') $error = 'Kid name required.';
+    else {
+      $id = gb2_kid_create($name, 0);
+      if ($pin !== '') gb2_kid_set_pin($id, $pin);
+      gb2_audit('admin', 0, 'setup_add_kid', ['kid'=>$name]);
+      $note = 'Kid added.';
+    }
+  } elseif ($action === 'seed_defaults') {
+    gb2_admin_require();
+    $pdo = gb2_pdo();
+    // Seed bonuses if empty
+    $c = (int)($pdo->query("SELECT COUNT(*) c FROM bonus_defs")->fetch()['c'] ?? 0);
+    if ($c === 0) {
+      $defs = [
+        ['Wipe inside of refrigerator', 500, 0, 0, 1],
+        ['Vacuum couch / cushions', 300, 0, 0, 1],
+        ['Organize pantry shelf', 300, 0, 0, 1],
+        ['Clean microwave inside', 200, 0, 0, 1],
+      ];
+      foreach ($defs as $i => $d) {
+        $pdo->prepare("INSERT INTO bonus_defs(title,active,reward_cents,reward_phone_min,reward_games_min,max_per_week,sort_order)
+                       VALUES(1,1,?,?,?,?,?,?)");
+      }
+    }
+    $note = 'Defaults seeded (if needed).';
+  }
+}
+
+gb2_page_start('Setup');
+$tok = gb2_csrf_token();
+?>
+<div class="card">
+  <div class="h1">Initial setup</div>
+  <div class="note">Run once to set admin password and create kids.</div>
+  <?php if ($note): ?><div class="status approved"><?=gb2_h($note)?></div><?php endif; ?>
+  <?php if ($error): ?><div class="status rejected"><?=gb2_h($error)?></div><?php endif; ?>
+
+  <?php if (!$hasAdmin): ?>
+    <hr>
+    <div class="h2">1) Set admin password</div>
+    <form method="post">
+      <input type="hidden" name="_csrf" value="<?=gb2_h($tok)?>">
+      <input type="hidden" name="action" value="set_admin">
+      <label class="small">Admin password (min 10 chars)</label>
+      <input class="input" type="password" name="admin_password" required>
+      <div style="height:12px"></div>
+      <button class="btn primary" type="submit">Save admin password</button>
+    </form>
+  <?php else: ?>
+    <div class="status approved">Admin password is set.</div>
+    <div class="note">Unlock at <a href="/admin/login.php">Admin Login</a>.</div>
+  <?php endif; ?>
+</div>
+
+<?php if ($hasAdmin): ?>
+<div class="card">
+  <div class="h1">Kids</div>
+  <div class="note">Add kids and set PINs. Recommended: 6 digits.</div>
+  <form method="post">
+    <input type="hidden" name="_csrf" value="<?=gb2_h($tok)?>">
+    <input type="hidden" name="action" value="add_kid">
+    <label class="small">Name</label>
+    <input class="input" name="kid_name" required>
+    <div style="height:10px"></div>
+    <label class="small">PIN (optional now)</label>
+    <input class="input" name="kid_pin" inputmode="numeric" pattern="[0-9]*">
+    <div style="height:12px"></div>
+    <button class="btn ok" type="submit">Add kid</button>
+  </form>
+  <hr>
+  <div class="small">Existing kids:</div>
+  <?php foreach (gb2_kids_all() as $k): ?>
+    <div class="badge" style="margin-top:8px"><?=gb2_h($k['name'])?></div>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
+
+<?php gb2_page_end(); ?>
