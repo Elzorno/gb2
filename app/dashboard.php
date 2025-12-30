@@ -5,7 +5,7 @@ require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/../lib/ui.php';
 require_once __DIR__ . '/../lib/rotation.php';
-require_once __DIR__ . '/../lib/privileges.php'; // if present in your build
+require_once __DIR__ . '/../lib/privileges.php';
 
 $kid = gb2_kid_require();
 
@@ -22,10 +22,7 @@ if (function_exists('gb2_is_weekday') && gb2_is_weekday($dObj)) {
   }
 }
 
-/**
- * Privileges / grounding status (best-effort: depends on your privileges lib functions)
- */
- = gb2_priv_get_for_kid((int));
+$priv = gb2_priv_get_for_kid((int)$kid['kid_id']);
 
 function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 
@@ -73,20 +70,15 @@ if (function_exists('gb2_ui_topbar')) {
   <section class="card" style="padding:14px;margin-bottom:14px">
     <h2 style="margin:0 0 8px 0">Grounding / Privileges</h2>
 
-    <?php if (is_array($priv)): ?>
-      <ul style="margin:0;padding-left:18px">
-        <li>Phone: <?= !empty($priv['phone_locked']) ? 'Locked' : 'Allowed' ?></li>
-        <li>Games: <?= !empty($priv['games_locked']) ? 'Locked' : 'Allowed' ?></li>
-        <li>Other: <?= !empty($priv['other_locked']) ? 'Locked' : 'Allowed' ?></li>
-      </ul>
-      <div class="muted" style="margin-top:8px">
-        Banks: Phone <?= (int)( ?? 0) ?> • Games <?= (int)( ?? 0) ?> • Other <?= (int)( ?? 0) ?>
-      </div>
-    <?php else: ?>
-      <div class="muted">
-        Privileges module is not returning data yet (dashboard is running, but we need to align function names in <code>lib/privileges.php</code>).
-      </div>
-    <?php endif; ?>
+    <ul style="margin:0;padding-left:18px">
+      <li>Phone: <?= ((int)$priv['phone_locked'] === 1) ? 'Locked' : 'Allowed' ?></li>
+      <li>Games: <?= ((int)$priv['games_locked'] === 1) ? 'Locked' : 'Allowed' ?></li>
+      <li>Other: <?= ((int)$priv['other_locked'] === 1) ? 'Locked' : 'Allowed' ?></li>
+    </ul>
+
+    <div class="muted" style="margin-top:8px">
+      Banks: Phone <?= (int)$priv['bank_phone_min'] ?> • Games <?= (int)$priv['bank_games_min'] ?> • Other <?= (int)$priv['bank_other_min'] ?>
+    </div>
 
     <div style="margin-top:10px">
       <a class="btn" href="/admin/grounding.php">Admin: Manage Privileges</a>
