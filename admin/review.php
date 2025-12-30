@@ -22,6 +22,7 @@ $pending = $pdo->query(
 
 gb2_page_start('Review', null);
 $tok = gb2_csrf_token();
+$flash = gb2_flash_from_query();
 ?>
 
 <div class="card">
@@ -31,6 +32,8 @@ $tok = gb2_csrf_token();
       <div class="h2">Approve or reject submitted proofs</div>
     </div>
   </div>
+
+  <?php gb2_flash_render($flash); ?>
 
   <?php if (!$pending): ?>
     <div class="status approved" style="margin-top:12px">Nothing pending 🎉</div>

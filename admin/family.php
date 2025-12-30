@@ -101,6 +101,11 @@ function gb2_norm_priv(array $priv): array {
 }
 
 gb2_page_start('Family', null);
+
+// Merge query flash into local flash slots (POST messages still win).
+$qflash = gb2_flash_from_query();
+if ($flash === '' && ($qflash['ok'] ?? '') !== '') $flash = (string)$qflash['ok'];
+if ($err === '' && ($qflash['err'] ?? '') !== '') $err = (string)$qflash['err'];
 ?>
 
 <div class="card">
@@ -112,11 +117,11 @@ gb2_page_start('Family', null);
   </div>
 
   <?php if ($flash): ?>
-    <div class="status approved" style="margin-top:12px"><?= gb2_h($flash) ?></div>
+    <div class="notice ok" style="margin-top:12px"><?= gb2_h($flash) ?></div>
   <?php endif; ?>
 
   <?php if ($err): ?>
-    <div class="status rejected" style="margin-top:12px"><?= gb2_h($err) ?></div>
+    <div class="notice bad" style="margin-top:12px"><?= gb2_h($err) ?></div>
   <?php endif; ?>
 </div>
 

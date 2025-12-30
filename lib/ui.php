@@ -6,6 +6,53 @@ require_once __DIR__ . '/csrf.php';
 require_once __DIR__ . '/auth.php';
 
 /**
+ * Read a one-time, redirect-safe flash message from query params.
+ * Supported:
+ *   - ?ok=Message
+ *   - ?err=Message
+ *   - ?saved=1   (maps to ok="Saved.")
+ *
+ * Returns: ['ok'=>string,'err'=>string]
+ */
+function gb2_flash_from_query(): array {
+  $ok = '';
+  $err = '';
+
+  if (isset($_GET['saved']) && (string)$_GET['saved'] === '1') {
+    $ok = 'Saved.';
+  }
+
+  if (isset($_GET['ok'])) {
+    $ok = trim((string)$_GET['ok']);
+  }
+
+  if (isset($_GET['err'])) {
+    $err = trim((string)$_GET['err']);
+  }
+
+  // Keep messages short and safe.
+  $ok  = mb_substr($ok, 0, 160);
+  $err = mb_substr($err, 0, 160);
+
+  return ['ok' => $ok, 'err' => $err];
+}
+
+/**
+ * Render flash banners in the shared UI style.
+ */
+function gb2_flash_render(array $flash): void {
+  $ok = (string)($flash['ok'] ?? '');
+  $err = (string)($flash['err'] ?? '');
+
+  if ($ok !== '') {
+    echo '<div class="notice ok">'.gb2_h($ok).'</div>';
+  }
+  if ($err !== '') {
+    echo '<div class="notice bad">'.gb2_h($err).'</div>';
+  }
+}
+
+/**
  * Bottom navigation: kid + admin share one consistent UI.
  *
  * Keys used by pages:
@@ -53,45 +100,12 @@ function gb2_nav(string $active): void {
 }
 
 /**
- * Admin-only cache control to reduce stale-page confusion during rapid iteration.
- * No infra changes; headers are per-response.
- */
-function gb2_admin_no_cache_headers(): void {
-  if (headers_sent()) return;
-
-  header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-  header('Cache-Control: post-check=0, pre-check=0', false); // legacy proxies
-  header('Pragma: no-cache');
-  header('Expires: 0');
-}
-
-/**
- * Optional helper: read simple "flash" messages from query string.
- * (Not required for existing pages; safe to add now for later polish.)
- */
-function gb2_flash_from_query(): array {
-  $ok  = (string)($_GET['ok'] ?? '');
-  $err = (string)($_GET['err'] ?? '');
-  $saved = (string)($_GET['saved'] ?? '');
-
-  if ($saved === '1' && $ok === '') $ok = 'Saved.';
-
-  return ['ok' => $ok, 'err' => $err];
-}
-
-/**
  * Shared page chrome. Uses sitewide CSS at /assets/css/app.css.
  * Keeps UI calm + consistent across kid/admin pages.
  */
 function gb2_page_start(string $title, ?array $kid = null): void {
   gb2_secure_headers();
   gb2_session_start();
-
-  // Admin pages: aggressively disable caching at the PHP response level.
-  $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
-  if (strncmp($uri, '/admin/', 7) === 0) {
-    gb2_admin_no_cache_headers();
-  }
 
   $admin = gb2_admin_current();
   $brandHref = $admin ? '/admin/dashboard.php' : '/app/dashboard.php';

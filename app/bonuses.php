@@ -20,10 +20,13 @@ if ($c === 0) gb2_bonus_reset_week($weekStart);
 $list = gb2_bonus_list_week($weekStart);
 
 gb2_page_start('Bonuses', $kid);
+$flash = gb2_flash_from_query();
 ?>
 <div class="card">
   <div class="h1">This Week</div>
   <div class="h2">Week starting <?= gb2_h($weekStart) ?></div>
+
+  <?php gb2_flash_render($flash); ?>
 
   <?php foreach ($list as $b): ?>
     <div class="card" style="margin:12px 0 0">

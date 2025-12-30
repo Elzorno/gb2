@@ -22,11 +22,6 @@ $pdo = gb2_pdo();
 
 $relPath = '';
 
-/**
- * Decide: uploaded photo vs sentinel NO_PHOTO.
- * - If no_photo=1: accept and store sentinel.
- * - Else: require a valid upload.
- */
 if ($noPhoto) {
   $relPath = 'NO_PHOTO';
 } else {
@@ -86,7 +81,8 @@ if ($kind === 'base') {
     'no_photo' => $noPhoto ? 1 : 0,
   ]);
 
-  header('Location: /app/today.php');
+  $msg = $noPhoto ? 'Submitted (no photo). Parent will review.' : 'Submitted. Parent will review.';
+  header('Location: /app/today.php?ok=' . urlencode($msg));
   exit;
 }
 
@@ -119,7 +115,8 @@ if ($kind === 'bonus') {
     'no_photo' => $noPhoto ? 1 : 0,
   ]);
 
-  header('Location: /app/bonuses.php');
+  $msg = $noPhoto ? 'Submitted (no photo). Parent will review.' : 'Submitted. Parent will review.';
+  header('Location: /app/bonuses.php?ok=' . urlencode($msg));
   exit;
 }
 

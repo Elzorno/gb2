@@ -19,6 +19,7 @@ if (gb2_is_weekday($dObj)) {
 }
 
 gb2_page_start('Today', $kid);
+$flash = gb2_flash_from_query();
 ?>
 <div class="card">
   <div class="row">
@@ -27,6 +28,8 @@ gb2_page_start('Today', $kid);
       <div class="h2"><?= gb2_h($today) ?></div>
     </div>
   </div>
+
+  <?php gb2_flash_render($flash); ?>
 
   <?php if (!gb2_is_weekday($dObj)): ?>
     <div class="status pending">Weekend mode — no base rotation today.</div>
@@ -54,12 +57,7 @@ gb2_page_start('Today', $kid);
 
           <div class="small" style="margin-bottom:6px">Photo proof</div>
 
-          <input
-            class="input"
-            type="file"
-            name="photo"
-            accept="image/*"
-          >
+          <input class="input" type="file" name="photo" accept="image/*">
 
           <div class="note" style="margin-top:8px">
             If photo upload doesn’t work on iPhone, you can submit without a photo and a parent will review.
@@ -71,7 +69,6 @@ gb2_page_start('Today', $kid);
           <div class="row" style="gap:10px; flex-wrap:wrap; justify-content:flex-start">
             <button class="btn primary" type="submit">Submit proof</button>
 
-            <!-- Fallback: submit without photo -->
             <button class="btn" type="submit" name="no_photo" value="1"
                     onclick="return confirm('Submit without a photo? A parent/guardian will review this proof manually.');">
               Submit without photo
