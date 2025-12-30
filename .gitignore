@@ -1,5 +1,10 @@
-/data/*
-!/data/.gitkeep
-*.sqlite
-*.db
-*.log
+# Local backups created during edits
+*.bak.*
+*.broken.*
+*.tmp
+*.swp
+*~
+
+# Optional: ignore OS cruft
+.DS_Store
+Thumbs.db
