@@ -7,6 +7,15 @@ require_once __DIR__ . '/lib/auth.php';
 gb2_session_start();
 gb2_secure_headers();
 
+/**
+ * Single entry router.
+ * - Admin: go to Family dashboard
+ * - Kid: go to Kid dashboard
+ * - Nobody: go to combined login (kid-first) at /app/login.php
+ *
+ * Note: Admin unlock should be performed at /admin/login.php when needed by admin pages.
+ */
+
 if (gb2_admin_current()) {
   header('Location: /admin/family.php');
   exit;
@@ -17,6 +26,5 @@ if (gb2_kid_current()) {
   exit;
 }
 
-// Logged out → kid/admin combined login page (exists)
 header('Location: /app/login.php');
 exit;

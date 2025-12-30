@@ -19,7 +19,6 @@ $tok = gb2_csrf_token();
       <div class="h1">Pending proofs</div>
       <div class="h2">Approve or reject</div>
     </div>
-    <a class="btn" href="/admin/logout.php">Lock</a>
   </div>
 
   <?php if (!$pending): ?><div class="status approved">Nothing pending 🎉</div><?php endif; ?>

@@ -25,7 +25,6 @@ gb2_page_start('Today', $kid);
       <div class="h1"><?= gb2_h((new DateTimeImmutable('now'))->format('l')) ?></div>
       <div class="h2"><?= gb2_h($today) ?></div>
     </div>
-    <a class="btn" href="/app/logout.php">Logout</a>
   </div>
 
   <?php if (!gb2_is_weekday($dObj)): ?>
