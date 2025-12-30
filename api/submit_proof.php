@@ -13,48 +13,48 @@ gb2_csrf_verify();
 
 $cfg = gb2_config();
 $maxBytes = (int)($cfg['uploads']['max_bytes'] ?? (7*1024*1024));
-
-if (empty($_FILES['photo']) || ($_FILES['photo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-  header('Location: /app/today.php?err=' . urlencode('Upload failed.'));
-  exit;
-}
-if ((int)($_FILES['photo']['size'] ?? 0) > $maxBytes) {
-  header('Location: /app/today.php?err=' . urlencode('File too large.'));
-  exit;
-}
-
-$tmp = (string)($_FILES['photo']['tmp_name'] ?? '');
-if ($tmp === '' || !is_file($tmp)) {
-  header('Location: /app/today.php?err=' . urlencode('Upload failed.'));
-  exit;
-}
-
-$mime = '';
-if (class_exists('finfo')) {
-  $fi = new finfo(FILEINFO_MIME_TYPE);
-  $mime = (string)$fi->file($tmp);
-}
-if (!$mime) $mime = (string)(mime_content_type($tmp) ?: '');
-if (!in_array($mime, ['image/jpeg','image/png','image/heic','image/heif','image/webp'], true)) {
-  header('Location: /app/today.php?err=' . urlencode('Unsupported image type.'));
-  exit;
-}
+$noPhoto  = ((string)($_POST['no_photo'] ?? '')) === '1';
 
 $dataDir = gb2_data_dir();
-$upDir = rtrim($dataDir,'/') . '/uploads/' . date('Y') . '/' . date('m');
-@mkdir($upDir, 0775, true);
+$photoRel = '';   // value stored in DB (relative under /data)
+$destAbs  = '';   // absolute file path if we actually save a file
 
-$ext = 'jpg';
-if ($mime === 'image/png') $ext = 'png';
-elseif ($mime === 'image/webp') $ext = 'webp';
-elseif (in_array($mime, ['image/heic','image/heif'], true)) $ext = 'heic';
+if ($noPhoto) {
+  // Sentinel: no file exists, but schema requires a value.
+  $photoRel = 'uploads/NO_PHOTO';
+} else {
+  if (empty($_FILES['photo']) || ($_FILES['photo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+    http_response_code(400); echo "Upload failed."; exit;
+  }
+  if ((int)($_FILES['photo']['size'] ?? 0) > $maxBytes) { http_response_code(413); echo "File too large."; exit; }
 
-$fname = bin2hex(random_bytes(16)) . '.' . $ext;
-$dest = $upDir . '/' . $fname;
+  $tmp = (string)($_FILES['photo']['tmp_name'] ?? '');
+  if ($tmp === '' || !is_file($tmp)) { http_response_code(400); echo "Upload failed."; exit; }
 
-if (!move_uploaded_file($tmp, $dest)) {
-  header('Location: /app/today.php?err=' . urlencode('Save failed.'));
-  exit;
+  $mime = '';
+  if (class_exists('finfo')) {
+    $fi = new finfo(FILEINFO_MIME_TYPE);
+    $mime = (string)$fi->file($tmp);
+  }
+  if (!$mime) $mime = (string)(mime_content_type($tmp) ?: '');
+  if (!in_array($mime, ['image/jpeg','image/png','image/heic','image/heif','image/webp'], true)) {
+    http_response_code(400); echo "Unsupported image type."; exit;
+  }
+
+  $upDir = rtrim($dataDir,'/') . '/uploads/' . date('Y') . '/' . date('m');
+  @mkdir($upDir, 0775, true);
+
+  $ext = 'jpg';
+  if ($mime === 'image/png') $ext='png';
+  elseif ($mime === 'image/webp') $ext='webp';
+  elseif (in_array($mime, ['image/heic','image/heif'], true)) $ext='heic';
+
+  $fname = bin2hex(random_bytes(16)) . '.' . $ext;
+  $destAbs = $upDir . '/' . $fname;
+
+  if (!move_uploaded_file($tmp, $destAbs)) { http_response_code(500); echo "Save failed."; exit; }
+
+  $photoRel = ltrim(str_replace(rtrim($dataDir,'/').'/', '', $destAbs), '/');
 }
 
 $kind = (string)($_POST['kind'] ?? '');
@@ -63,52 +63,49 @@ $pdo = gb2_pdo();
 if ($kind === 'base') {
   $day = (string)($_POST['day'] ?? '');
   $slotId = (int)($_POST['slot_id'] ?? 0);
-  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $day) || $slotId <= 0) {
-    header('Location: /app/today.php?err=' . urlencode('Bad request.'));
-    exit;
-  }
+  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $day) || $slotId <= 0) { http_response_code(400); exit; }
 
   $pdo->prepare("INSERT INTO submissions(kind,day,kid_id,slot_id,photo_path,status,submitted_at)
                  VALUES('base',?,?,?,?, 'pending', ?)")
-      ->execute([$day, (int)$kid['kid_id'], $slotId, str_replace($dataDir.'/', '', $dest), gb2_now_iso()]);
+      ->execute([$day, (int)$kid['kid_id'], $slotId, $photoRel, gb2_now_iso()]);
   $subId = (int)$pdo->lastInsertId();
 
   $pdo->prepare("UPDATE assignments SET status='pending', submission_id=? WHERE day=? AND kid_id=?")
       ->execute([$subId, $day, (int)$kid['kid_id']]);
 
-  gb2_audit('kid', (int)$kid['kid_id'], 'submit_base_proof', ['day'=>$day,'slot_id'=>$slotId,'sub_id'=>$subId]);
-  header('Location: /app/today.php?ok=' . urlencode('Submitted. Waiting for approval.'));
+  gb2_audit('kid', (int)$kid['kid_id'], $noPhoto ? 'submit_base_no_photo' : 'submit_base_proof',
+    ['day'=>$day,'slot_id'=>$slotId,'sub_id'=>$subId]);
+
+  header('Location: /app/today.php?ok=' . urlencode($noPhoto ? 'Submitted (no photo). Waiting for approval.' : 'Submitted. Waiting for approval.'));
   exit;
 }
 
 if ($kind === 'bonus') {
   $weekStart = (string)($_POST['week_start'] ?? '');
   $instanceId = (int)($_POST['instance_id'] ?? 0);
-  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $weekStart) || $instanceId <= 0) {
-    header('Location: /app/bonuses.php?err=' . urlencode('Bad request.'));
-    exit;
-  }
+  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $weekStart) || $instanceId <= 0) { http_response_code(400); exit; }
 
   $st = $pdo->prepare("SELECT * FROM bonus_instances WHERE id=?");
   $st->execute([$instanceId]);
-  $bi = $st->fetch(PDO::FETCH_ASSOC);
+  $bi = $st->fetch();
   if (!$bi || (string)$bi['status'] !== 'claimed' || (int)$bi['claimed_by_kid'] !== (int)$kid['kid_id']) {
-    header('Location: /app/bonuses.php?err=' . urlencode('Not your bonus.'));
-    exit;
+    http_response_code(403); echo "Not your bonus."; exit;
   }
 
   $pdo->prepare("INSERT INTO submissions(kind,week_start,kid_id,bonus_instance_id,photo_path,status,submitted_at)
                  VALUES('bonus',?,?,?,?, 'pending', ?)")
-      ->execute([$weekStart, (int)$kid['kid_id'], $instanceId, str_replace($dataDir.'/', '', $dest), gb2_now_iso()]);
+      ->execute([$weekStart, (int)$kid['kid_id'], $instanceId, $photoRel, gb2_now_iso()]);
   $subId = (int)$pdo->lastInsertId();
 
   $pdo->prepare("UPDATE bonus_instances SET status='pending', submission_id=? WHERE id=?")
       ->execute([$subId, $instanceId]);
 
-  gb2_audit('kid', (int)$kid['kid_id'], 'submit_bonus_proof', ['week_start'=>$weekStart,'instance_id'=>$instanceId,'sub_id'=>$subId]);
-  header('Location: /app/bonuses.php?ok=' . urlencode('Submitted. Waiting for approval.'));
+  gb2_audit('kid', (int)$kid['kid_id'], $noPhoto ? 'submit_bonus_no_photo' : 'submit_bonus_proof',
+    ['week_start'=>$weekStart,'instance_id'=>$instanceId,'sub_id'=>$subId]);
+
+  header('Location: /app/bonuses.php?ok=' . urlencode($noPhoto ? 'Submitted (no photo). Waiting for approval.' : 'Submitted. Waiting for approval.'));
   exit;
 }
 
-header('Location: /app/today.php?err=' . urlencode('Bad request.'));
-exit;
+http_response_code(400);
+echo "Bad request.";

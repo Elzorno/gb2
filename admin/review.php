@@ -51,7 +51,7 @@ $tok = gb2_csrf_token();
       </div>
 
       <div style="margin-top:10px">
-        <a class="btn" href="/data/<?= gb2_h((string)$p['photo_path']) ?>" target="_blank" rel="noopener">View photo</a>
+        <?php if ((string)$p['photo_path'] === 'uploads/NO_PHOTO'): ?><div class="note">No photo provided.</div><?php else: ?><a class="btn" href="/data/<?= gb2_h((string)$p['photo_path']) ?>" target="_blank" rel="noopener">View photo</a><?php endif; ?>
       </div>
 
       <form method="post" action="/api/approve.php" style="margin-top:10px" class="grid two">

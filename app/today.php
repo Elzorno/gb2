@@ -58,6 +58,16 @@ gb2_page_start('Today', $kid);
           <input class="input" type="file" name="photo" accept="image/*" required>
 
           <div style="height:10px"></div>
+          </form>
+
+          <form method="post" action="/api/submit_proof.php" style="margin-top:10px">
+            <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
+            <input type="hidden" name="kind" value="base">
+            <input type="hidden" name="day" value="<?= gb2_h($today) ?>">
+            <input type="hidden" name="slot_id" value="<?= (int)$slotId ?>">
+            <input type="hidden" name="no_photo" value="1">
+            <button class="btn" type="submit">Verify without photo</button>
+          </form>
           <button class="btn primary" type="submit">Submit proof</button>
         </form>
       </div>
