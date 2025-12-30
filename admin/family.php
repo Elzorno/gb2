@@ -34,7 +34,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
   } elseif ($action === 'reset_pin') {
     $st = $pdo->prepare("UPDATE kids SET pin_hash='' WHERE id=?");
     $st->execute([$kidId]);
-    $flash = 'PIN reset. On next login, they will be prompted to create a new PIN.';
+    $flash = 'PIN reset. They will create a new PIN next time they log in.';
   } else {
     $err = 'Unknown action.';
   }
@@ -109,11 +109,11 @@ if ($err === '' && ($qflash['err'] ?? '') !== '') $err = (string)$qflash['err'];
 ?>
 
 <div class="card">
-  <div class="h1">Family Dashboard</div>
-  <div class="h2">Quick view for today</div>
+  <div class="h1">Family</div>
+  <div class="h2">Quick view</div>
 
   <div class="note" style="margin-top:10px">
-    Today: <?= gb2_h($today->format('l, M j')) ?>
+    Today: <?= gb2_h(gb2_human_date($todayYmd)) ?>
   </div>
 
   <?php if ($flash): ?>
@@ -211,9 +211,9 @@ if ($err === '' && ($qflash['err'] ?? '') !== '') $err = (string)$qflash['err'];
     <div style="height:12px"></div>
 
     <div class="row" style="gap:10px; flex-wrap:wrap">
-      <a class="btn" href="/admin/grounding.php">Edit privileges</a>
-      <a class="btn" href="/admin/review.php">Review proofs</a>
-      <a class="btn" href="/app/today.php">Open kid view</a>
+      <a class="btn" href="/admin/grounding.php">Edit Privileges</a>
+      <a class="btn" href="/admin/review.php">Review Proofs</a>
+      <a class="btn" href="/app/today.php">Open Kid View</a>
     </div>
   </div>
 

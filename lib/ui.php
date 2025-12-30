@@ -53,6 +53,42 @@ function gb2_flash_render(array $flash): void {
 }
 
 /**
+ * User-facing status labels (do NOT change DB values).
+ * Keeps CSS class as the raw status string (open/pending/approved/rejected),
+ * but displays friendly text.
+ */
+function gb2_status_label(string $status): string {
+  $s = strtolower(trim($status));
+  return match ($s) {
+    'open'     => 'Open',
+    'pending'  => 'Waiting for review',
+    'approved' => 'Approved',
+    'rejected' => 'Rejected',
+    default    => ($status !== '' ? $status : '—'),
+  };
+}
+
+/**
+ * Friendly date helpers.
+ */
+function gb2_human_date(string $ymd): string {
+  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ymd)) return $ymd;
+  $d = new DateTimeImmutable($ymd);
+  return $d->format('D, M j');
+}
+
+function gb2_human_datetime(string $iso): string {
+  $iso = trim($iso);
+  if ($iso === '') return '';
+  try {
+    $d = new DateTimeImmutable($iso);
+    return $d->format('D, M j g:ia');
+  } catch (Throwable $e) {
+    return $iso;
+  }
+}
+
+/**
  * Bottom navigation: kid + admin share one consistent UI.
  *
  * Keys used by pages:

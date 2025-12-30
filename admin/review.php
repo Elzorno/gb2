@@ -37,24 +37,30 @@ $flash = gb2_flash_from_query();
 
   <?php if (!$pending): ?>
     <div class="status approved" style="margin-top:12px">Nothing pending 🎉</div>
-    <div class="note" style="margin-top:10px">When a kid submits proof, it will appear here until you approve or reject it.</div>
+    <div class="note" style="margin-top:10px">
+      When a kid submits proof, it will appear here until you approve or reject it.
+    </div>
   <?php endif; ?>
 
   <?php foreach ($pending as $p): ?>
     <?php
       $photoPath = (string)($p['photo_path'] ?? '');
       $hasPhoto  = ($photoPath !== '' && $photoPath !== 'NO_PHOTO');
+
+      $kindRaw = (string)($p['kind'] ?? '');
+      $kindTxt = ($kindRaw === 'base') ? 'Base chore' : (($kindRaw === 'bonus') ? 'Bonus' : ($kindRaw !== '' ? $kindRaw : '—'));
+      $whenTxt = gb2_human_datetime((string)($p['submitted_at'] ?? ''));
     ?>
     <div class="card" style="margin:12px 0 0">
       <div class="row">
         <div class="kv">
           <div class="h1"><?= gb2_h((string)$p['name']) ?></div>
           <div class="small">
-            <?= gb2_h((string)$p['kind']) ?>
-            · <?= gb2_h((string)$p['submitted_at']) ?>
+            <?= gb2_h($kindTxt) ?>
+            <?php if ($whenTxt !== ''): ?> · <?= gb2_h($whenTxt) ?><?php endif; ?>
           </div>
         </div>
-        <div class="status pending">pending</div>
+        <div class="status pending"><?= gb2_h(gb2_status_label('pending')) ?></div>
       </div>
 
       <div style="margin-top:10px" class="row" style="gap:10px; flex-wrap:wrap; justify-content:flex-start">
@@ -72,7 +78,8 @@ $flash = gb2_flash_from_query();
         <input class="input" name="note" placeholder="Optional note (visible to you)">
 
         <div class="row" style="justify-content:flex-end">
-          <button class="btn bad" name="decision" value="rejected" type="submit">Reject</button>
+          <button class="btn bad" name="decision" value="rejected" type="submit"
+                  onclick="return confirm('Reject this proof?');">Reject</button>
           <button class="btn ok" name="decision" value="approved" type="submit">Approve</button>
         </div>
       </form>

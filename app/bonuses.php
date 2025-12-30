@@ -24,52 +24,71 @@ $flash = gb2_flash_from_query();
 ?>
 <div class="card">
   <div class="h1">This Week</div>
-  <div class="h2">Week starting <?= gb2_h($weekStart) ?></div>
+  <div class="h2">Week starting <?= gb2_h(gb2_human_date($weekStart)) ?></div>
 
   <?php gb2_flash_render($flash); ?>
 
+  <?php if (!$list): ?>
+    <div class="status pending" style="margin-top:12px">No bonuses available</div>
+    <div class="note" style="margin-top:10px">
+      Bonuses reset every Monday.
+    </div>
+  <?php endif; ?>
+
   <?php foreach ($list as $b): ?>
+    <?php
+      $title = (string)($b['title'] ?? 'Bonus');
+      $statusRaw = (string)($b['status'] ?? '');
+      $statusTxt = gb2_status_label($statusRaw);
+    ?>
     <div class="card" style="margin:12px 0 0">
       <div class="row">
         <div class="kv">
-          <div class="h1"><?= gb2_h((string)$b['title']) ?></div>
+          <div class="h1"><?= gb2_h($title) ?></div>
           <div class="small">
             Reward:
-            <?php if ((int)$b['reward_cents'] > 0): ?> $<?= number_format(((int)$b['reward_cents'])/100, 2) ?><?php endif; ?>
-            <?php if ((int)$b['reward_phone_min'] > 0): ?> · +<?= (int)$b['reward_phone_min'] ?> min phone<?php endif; ?>
-            <?php if ((int)$b['reward_games_min'] > 0): ?> · +<?= (int)$b['reward_games_min'] ?> min games<?php endif; ?>
+            <?php if ((int)($b['reward_cents'] ?? 0) > 0): ?>
+              $<?= number_format(((int)$b['reward_cents'])/100, 2) ?>
+            <?php endif; ?>
+            <?php if ((int)($b['reward_phone_min'] ?? 0) > 0): ?>
+              · +<?= (int)$b['reward_phone_min'] ?> min phone
+            <?php endif; ?>
+            <?php if ((int)($b['reward_games_min'] ?? 0) > 0): ?>
+              · +<?= (int)$b['reward_games_min'] ?> min games
+            <?php endif; ?>
           </div>
         </div>
-        <div class="status <?= gb2_h((string)$b['status']) ?>"><?= gb2_h((string)$b['status']) ?></div>
+        <div class="status <?= gb2_h($statusRaw) ?>"><?= gb2_h($statusTxt) ?></div>
       </div>
 
-      <?php if ($b['status'] === 'available'): ?>
+      <?php if ($statusRaw === 'available'): ?>
+        <div class="note" style="margin-top:10px">Claim it first, then submit proof when you’re done.</div>
         <form method="post" action="/api/claim_bonus.php" style="margin-top:10px">
           <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
-          <input type="hidden" name="instance_id" value="<?= (int)$b['instance_id'] ?>">
+          <input type="hidden" name="instance_id" value="<?= (int)($b['instance_id'] ?? 0) ?>">
           <button class="btn ok" type="submit">Claim</button>
         </form>
 
-      <?php elseif ($b['status'] === 'claimed' && (int)$b['claimed_by_kid'] === (int)$kid['kid_id']): ?>
+      <?php elseif ($statusRaw === 'claimed' && (int)($b['claimed_by_kid'] ?? 0) === (int)$kid['kid_id']): ?>
+        <div class="note" style="margin-top:10px">You claimed this. Submit proof when finished.</div>
         <form method="post" action="/api/submit_proof.php" enctype="multipart/form-data" style="margin-top:10px">
           <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
           <input type="hidden" name="kind" value="bonus">
           <input type="hidden" name="week_start" value="<?= gb2_h($weekStart) ?>">
-          <input type="hidden" name="instance_id" value="<?= (int)$b['instance_id'] ?>">
+          <input type="hidden" name="instance_id" value="<?= (int)($b['instance_id'] ?? 0) ?>">
 
           <div class="small" style="margin-bottom:6px">Photo proof</div>
-
           <input class="input" type="file" name="photo" accept="image/*">
 
           <div class="note" style="margin-top:8px">
-            If photo upload doesn’t work on iPhone, you can submit without a photo and a parent will review.
-            <a href="/app/help_photos.php" style="text-decoration:underline">Can’t upload photos?</a>
+            If photo upload doesn’t work, you can submit without a photo and a parent will review.
+            <a href="/app/help_photos.php" style="text-decoration:underline">Help</a>
           </div>
 
           <div style="height:10px"></div>
 
           <div class="row" style="gap:10px; flex-wrap:wrap; justify-content:flex-start">
-            <button class="btn primary" type="submit">Submit proof</button>
+            <button class="btn primary" type="submit">Submit</button>
 
             <button class="btn" type="submit" name="no_photo" value="1"
                     onclick="return confirm('Submit without a photo? A parent/guardian will review this proof manually.');">
@@ -81,7 +100,7 @@ $flash = gb2_flash_from_query();
     </div>
   <?php endforeach; ?>
 
-  <div class="note" style="margin-top:12px">Bonuses are first-come and reset every Monday.</div>
+  <div class="note" style="margin-top:12px">Bonuses reset every Monday.</div>
 </div>
 
 <?php gb2_nav('bonuses'); gb2_page_end(); ?>
