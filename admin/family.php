@@ -23,7 +23,6 @@ $weekStartYmd = gb2_bonus_week_start($todayYmd);
 $flash = '';
 $err   = '';
 
-// --- POST actions (admin-only, CSRF protected) ---
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
   gb2_csrf_verify();
 
@@ -33,11 +32,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
   if ($kidId <= 0) {
     $err = 'Invalid kid.';
   } elseif ($action === 'reset_pin') {
-    // IMPORTANT: kids.pin_hash is NOT NULL in your schema, default ''.
-    // Reset by setting to empty string, so next login triggers "create PIN" flow.
     $st = $pdo->prepare("UPDATE kids SET pin_hash='' WHERE id=?");
     $st->execute([$kidId]);
-
     $flash = 'PIN reset. On next login, they will be prompted to create a new PIN.';
   } else {
     $err = 'Unknown action.';
@@ -52,16 +48,56 @@ function bonus_available_count_for_kid(int $kidId, array $rows): int {
   foreach ($rows as $r) {
     if (!is_array($r)) continue;
 
-    // If the row contains kid_id-like fields, respect them; otherwise treat as global.
     if (isset($r['kid_id']) && (int)$r['kid_id'] !== $kidId) continue;
     if (!isset($r['kid_id']) && isset($r['kid']) && (int)$r['kid'] !== $kidId) continue;
 
-    // Determine availability by best-known fields
     if (isset($r['claimed_by_kid_id']) && (int)$r['claimed_by_kid_id'] === 0) { $count++; continue; }
     if (isset($r['claimed_by_kid']) && (int)$r['claimed_by_kid'] === 0) { $count++; continue; }
     if (isset($r['status']) && (string)$r['status'] === 'available') { $count++; continue; }
   }
   return $count;
+}
+
+/**
+ * Normalize privileges into:
+ *   ['locks'=>['phone'=>0/1,'games'=>0/1,'other'=>0/1],
+ *    'banks'=>['phone'=>min,'games'=>min,'other'=>min]]
+ *
+ * Works whether gb2_priv_get_for_kid() returns:
+ *  - normalized keys (locks/banks), or
+ *  - raw DB columns (phone_locked, bank_phone_min, etc.)
+ */
+function gb2_norm_priv(array $priv): array {
+  if (isset($priv['locks']) && is_array($priv['locks'])) {
+    $locks = $priv['locks'];
+    $banks = (isset($priv['banks']) && is_array($priv['banks'])) ? $priv['banks'] : [];
+
+    return [
+      'locks' => [
+        'phone' => (int)($locks['phone'] ?? $locks['phone_locked'] ?? 0),
+        'games' => (int)($locks['games'] ?? $locks['games_locked'] ?? 0),
+        'other' => (int)($locks['other'] ?? $locks['other_locked'] ?? 0),
+      ],
+      'banks' => [
+        'phone' => (int)($banks['phone'] ?? $banks['bank_phone_min'] ?? 0),
+        'games' => (int)($banks['games'] ?? $banks['bank_games_min'] ?? 0),
+        'other' => (int)($banks['other'] ?? $banks['bank_other_min'] ?? 0),
+      ],
+    ];
+  }
+
+  return [
+    'locks' => [
+      'phone' => (int)($priv['phone_locked'] ?? 0),
+      'games' => (int)($priv['games_locked'] ?? 0),
+      'other' => (int)($priv['other_locked'] ?? 0),
+    ],
+    'banks' => [
+      'phone' => (int)($priv['bank_phone_min'] ?? 0),
+      'games' => (int)($priv['bank_games_min'] ?? 0),
+      'other' => (int)($priv['bank_other_min'] ?? 0),
+    ],
+  ];
 }
 
 gb2_page_start('Family', null);
@@ -90,7 +126,8 @@ gb2_page_start('Family', null);
   $kidName = (string)($kidRow['name'] ?? ('Kid #' . $kidId));
 
   $assignments = $kidId ? gb2_assignments_for_kid_day($kidId, $todayYmd) : [];
-  $priv        = $kidId ? gb2_priv_get_for_kid($kidId) : ['locks'=>[], 'banks'=>[]];
+  $privRaw     = $kidId ? gb2_priv_get_for_kid($kidId) : [];
+  $priv        = is_array($privRaw) ? gb2_norm_priv($privRaw) : ['locks'=>['phone'=>0,'games'=>0,'other'=>0], 'banks'=>['phone'=>0,'games'=>0,'other'=>0]];
 
   $bonusAvail  = $kidId ? bonus_available_count_for_kid($kidId, $weekBonusRows) : 0;
 
@@ -100,11 +137,10 @@ gb2_page_start('Family', null);
     else $titles[] = (string)$a;
   }
 
-  $locks = is_array($priv['locks'] ?? null) ? $priv['locks'] : [];
-  $banks = is_array($priv['banks'] ?? null) ? $priv['banks'] : [];
+  $locks = $priv['locks'];
+  $banks = $priv['banks'];
 
-  $anyLock = false;
-  foreach ($locks as $k => $on) { if ((int)$on === 1) { $anyLock = true; break; } }
+  $anyLock = ((int)$locks['phone'] === 1) || ((int)$locks['games'] === 1) || ((int)$locks['other'] === 1);
 ?>
 
   <div class="card">
@@ -150,11 +186,9 @@ gb2_page_start('Family', null);
     <div class="small">Locks</div>
     <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:8px">
       <?php if ($anyLock): ?>
-        <?php foreach ($locks as $k => $on): ?>
-          <?php if ((int)$on === 1): ?>
-            <div class="badge"><?= gb2_h((string)$k) ?>: Locked</div>
-          <?php endif; ?>
-        <?php endforeach; ?>
+        <?php if ((int)$locks['phone'] === 1): ?><div class="badge">Phone: Locked</div><?php endif; ?>
+        <?php if ((int)$locks['games'] === 1): ?><div class="badge">Games: Locked</div><?php endif; ?>
+        <?php if ((int)$locks['other'] === 1): ?><div class="badge">Other: Locked</div><?php endif; ?>
       <?php else: ?>
         <div class="badge">No active locks</div>
       <?php endif; ?>
@@ -164,13 +198,9 @@ gb2_page_start('Family', null);
 
     <div class="small">Banked minutes</div>
     <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:8px">
-      <?php if (!empty($banks)): ?>
-        <?php foreach ($banks as $bank => $min): ?>
-          <div class="badge"><?= gb2_h((string)$bank) ?>: <?= (int)$min ?> min</div>
-        <?php endforeach; ?>
-      <?php else: ?>
-        <div class="badge">No banked time</div>
-      <?php endif; ?>
+      <div class="badge">Phone: <?= (int)$banks['phone'] ?> min</div>
+      <div class="badge">Games: <?= (int)$banks['games'] ?> min</div>
+      <div class="badge">Other: <?= (int)$banks['other'] ?> min</div>
     </div>
 
     <div style="height:12px"></div>
