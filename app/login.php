@@ -14,37 +14,101 @@ if ($kid) {
   exit;
 }
 
-// Load kids list (known schema)
 $err = '';
-$kidId = '';
-$pin = '';
+$mode = 'login'; // 'login' or 'setpin'
+$kidId = trim((string)($_POST['kid_id'] ?? ($_GET['kid_id'] ?? '')));
 $kids = [];
+$kidRow = null;
 
 try {
   $pdo = gb2_pdo();
-  $kids = $pdo->query("SELECT id, name FROM kids ORDER BY sort_order ASC, name COLLATE NOCASE ASC")->fetchAll();
+  $kids = $pdo->query("SELECT id, name FROM kids ORDER BY sort_order ASC, name COLLATE NOCASE ASC")->fetchAll(PDO::FETCH_ASSOC);
+
+  if ($kidId !== '' && ctype_digit($kidId)) {
+    $st = $pdo->prepare("SELECT id, name, pin_hash FROM kids WHERE id=?");
+    $st->execute([(int)$kidId]);
+    $kidRow = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+
+    // Determine mode: if no PIN set yet, we switch to set-pin mode
+    if ($kidRow && trim((string)($kidRow['pin_hash'] ?? '')) === '') {
+      $mode = 'setpin';
+    }
+  }
 } catch (Throwable $e) {
   $kids = [];
   $err = 'Login is temporarily unavailable. Please tell a parent/guardian.';
 }
 
-// POST: authenticate via gb2_kid_login(int, pin)
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
   gb2_csrf_verify();
 
   $kidId = trim((string)($_POST['kid_id'] ?? ''));
-  $pin   = trim((string)($_POST['pin'] ?? ''));
 
   if ($kidId === '' || !ctype_digit($kidId)) {
     $err = 'Please choose your name.';
-  } elseif ($pin === '') {
-    $err = 'Please enter your PIN.';
   } else {
-    if (gb2_kid_login((int)$kidId, $pin)) {
-      header('Location: /app/dashboard.php');
-      exit;
+    try {
+      $pdo = gb2_pdo();
+      $st = $pdo->prepare("SELECT id, name, pin_hash FROM kids WHERE id=?");
+      $st->execute([(int)$kidId]);
+      $kidRow = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (Throwable $e) {
+      $kidRow = null;
+      $err = 'Login is temporarily unavailable. Please tell a parent/guardian.';
     }
-    $err = 'That didn’t match. Please try again.';
+
+    if (!$kidRow) {
+      $err = 'Please choose your name.';
+    } else {
+      $existingHash = trim((string)($kidRow['pin_hash'] ?? ''));
+
+      if ($existingHash === '') {
+        // --- First-time / reset PIN flow ---
+        $mode = 'setpin';
+        $new1 = trim((string)($_POST['new_pin'] ?? ''));
+        $new2 = trim((string)($_POST['confirm_pin'] ?? ''));
+
+        if ($new1 === '' || $new2 === '') {
+          $err = 'Please enter and confirm your new PIN.';
+        } elseif (!ctype_digit($new1) || !ctype_digit($new2)) {
+          $err = 'PIN must be numbers only.';
+        } elseif (strlen($new1) < 4 || strlen($new1) > 10) {
+          $err = 'PIN must be 4–10 digits.';
+        } elseif ($new1 !== $new2) {
+          $err = 'Those didn’t match. Please try again.';
+        } else {
+          // Save hash
+          try {
+            $hash = password_hash($new1, PASSWORD_ARGON2ID);
+            $up = $pdo->prepare("UPDATE kids SET pin_hash=? WHERE id=?");
+            $up->execute([$hash, (int)$kidRow['id']]);
+
+            // Now log in using existing auth path
+            if (gb2_kid_login((int)$kidRow['id'], $new1)) {
+              header('Location: /app/dashboard.php');
+              exit;
+            }
+            $err = 'PIN saved, but login failed. Please try again.';
+          } catch (Throwable $e) {
+            $err = 'Could not save your PIN. Please tell a parent/guardian.';
+          }
+        }
+      } else {
+        // --- Normal login flow ---
+        $mode = 'login';
+        $pin = trim((string)($_POST['pin'] ?? ''));
+
+        if ($pin === '') {
+          $err = 'Please enter your PIN.';
+        } else {
+          if (gb2_kid_login((int)$kidRow['id'], $pin)) {
+            header('Location: /app/dashboard.php');
+            exit;
+          }
+          $err = 'That didn’t match. Please try again.';
+        }
+      }
+    }
   }
 }
 
@@ -52,7 +116,12 @@ gb2_page_start('Kid Login', null);
 ?>
 <div class="card">
   <div class="h1">Kid Login</div>
-  <div class="h2">Choose your name, then enter your PIN.</div>
+
+  <?php if ($mode === 'setpin' && $kidRow): ?>
+    <div class="h2">Set a new PIN for <?= gb2_h((string)$kidRow['name']) ?>.</div>
+  <?php else: ?>
+    <div class="h2">Choose your name, then enter your PIN.</div>
+  <?php endif; ?>
 
   <?php if ($err !== ''): ?>
     <div class="status pending" style="margin-top:12px"><?= gb2_h($err) ?></div>
@@ -62,7 +131,7 @@ gb2_page_start('Kid Login', null);
     <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
 
     <label class="small">Your name</label>
-    <select class="input" name="kid_id" required>
+    <select class="input" name="kid_id" required onchange="if (this.value) { window.location.href='/app/login.php?kid_id=' + encodeURIComponent(this.value); }">
       <option value="">— Select —</option>
       <?php foreach ($kids as $k): ?>
         <?php
@@ -76,11 +145,32 @@ gb2_page_start('Kid Login', null);
 
     <div style="height:10px"></div>
 
-    <label class="small">PIN</label>
-    <input class="input" name="pin" type="password" inputmode="numeric" placeholder="••••" required>
+    <?php if ($mode === 'setpin' && $kidId !== ''): ?>
+      <label class="small">New PIN (4–10 digits)</label>
+      <input class="input" name="new_pin" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••" required>
 
-    <div style="height:12px"></div>
-    <button class="btn primary" type="submit">Log in</button>
+      <div style="height:10px"></div>
+
+      <label class="small">Confirm new PIN</label>
+      <input class="input" name="confirm_pin" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••" required>
+
+      <div style="height:12px"></div>
+      <button class="btn primary" type="submit">Save PIN &amp; Log in</button>
+
+      <div class="note" style="margin-top:10px">
+        If you forgot your PIN, ask a parent/guardian to reset it from Family Dashboard.
+      </div>
+    <?php else: ?>
+      <label class="small">PIN</label>
+      <input class="input" name="pin" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••" required>
+
+      <div style="height:12px"></div>
+      <button class="btn primary" type="submit">Log in</button>
+
+      <div class="note" style="margin-top:10px">
+        If you forgot your PIN, ask a parent/guardian to reset it.
+      </div>
+    <?php endif; ?>
   </form>
 
   <div class="note" style="margin-top:12px">
