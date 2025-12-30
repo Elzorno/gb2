@@ -1,41 +1,41 @@
 <?php
 declare(strict_types=1);
+
 require_once __DIR__ . '/common.php';
 require_once __DIR__ . '/csrf.php';
 require_once __DIR__ . '/auth.php';
 
+/**
+ * Bottom nav (pretty nav).
+ * - Kid nav is default
+ * - Admin nav appears only when admin is unlocked
+ */
 function gb2_nav(string $active): void {
   $kid = gb2_kid_current();
   $admin = gb2_admin_current();
 
-  $items = [];
+  // Kid navigation (default)
+  $items = [
+    ['key'=>'today','href'=>'/app/today.php','label'=>'Today'],
+    ['key'=>'bonuses','href'=>'/app/bonuses.php','label'=>'Bonuses'],
+    ['key'=>'history','href'=>'/app/history.php','label'=>'History'],
+  ];
 
+  // Admin-only items
   if ($admin) {
-    // Admin nav (admin-first, same "pretty" style as kid nav)
-    $items = [
-      ['key'=>'dashboard','href'=>'/admin/dashboard.php','label'=>'Dashboard'],
-      ['key'=>'family','href'=>'/admin/family.php','label'=>'Family'],
-      ['key'=>'setup','href'=>'/admin/setup.php','label'=>'Setup'],
-      ['key'=>'review','href'=>'/admin/review.php','label'=>'Review'],
-      ['key'=>'grounding','href'=>'/admin/grounding.php','label'=>'Grounding'],
-      ['key'=>'kidview','href'=>'/app/dashboard.php','label'=>'Kid View'],
-      ['key'=>'logout','href'=>'/admin/logout.php','label'=>'Lock'],
-    ];
+    $items[] = ['key'=>'family','href'=>'/admin/family.php','label'=>'Family'];
+    $items[] = ['key'=>'grounding','href'=>'/admin/grounding.php','label'=>'Grounding'];
+    $items[] = ['key'=>'review','href'=>'/admin/review.php','label'=>'Review'];
+    $items[] = ['key'=>'setup','href'=>'/admin/setup.php','label'=>'Setup'];
+    $items[] = ['key'=>'kidview','href'=>'/app/today.php','label'=>'Kid View'];
+    $items[] = ['key'=>'logout','href'=>'/admin/logout.php','label'=>'Lock'];
   } elseif ($kid) {
-    // Kid nav
-    $items = [
-      ['key'=>'dashboard','href'=>'/app/dashboard.php','label'=>'Dashboard'],
-      ['key'=>'today','href'=>'/app/today.php','label'=>'Today'],
-      ['key'=>'bonuses','href'=>'/app/bonuses.php','label'=>'Bonuses'],
-      ['key'=>'history','href'=>'/app/history.php','label'=>'History'],
-      ['key'=>'logout','href'=>'/app/logout.php','label'=>'Log out'],
-    ];
-  } else {
-    // Not logged in: keep roles explicit
-    $items = [
-      ['key'=>'login','href'=>'/app/login.php','label'=>'Kid Login'],
-      ['key'=>'admin','href'=>'/admin/login.php','label'=>'Parent/Guardian'],
-    ];
+    $items[] = ['key'=>'logout','href'=>'/app/logout.php','label'=>'Log out'];
+  }
+
+  // If nobody is logged in yet, show Login as a hint (non-blocking)
+  if (!$kid && !$admin) {
+    $items[] = ['key'=>'login','href'=>'/app/login.php','label'=>'Login'];
   }
 
   echo '<div class="nav"><div class="wrap">';
@@ -46,24 +46,41 @@ function gb2_nav(string $active): void {
   echo '</div></div>';
 }
 
+/**
+ * Unified page shell.
+ *
+ * Header/nav consistency rules:
+ * - Brand is always "GB2" and links to "/" (deterministic router)
+ * - Screen title is shown consistently in the top bar
+ * - Kid badge appears when a kid is logged in (or provided)
+ */
 function gb2_page_start(string $title, ?array $kid = null): void {
   gb2_secure_headers();
   gb2_session_start();
 
-  $kidName = ($kid && isset($kid['name'])) ? (string)$kid['name'] : '';
-  $isAdmin = (function_exists('gb2_admin_current') && gb2_admin_current());
+  // If kid wasn't provided explicitly, use current (helps pages that don't pass it)
+  if ($kid === null) {
+    $cur = gb2_kid_current();
+    if (is_array($cur)) { $kid = $cur; }
+  }
 
-  echo '<!doctype html><html><head><meta charset="utf-8">';
+  $kidBadge = '';
+  if ($kid && isset($kid['name'])) {
+    $kidBadge = 'Kid: ' . (string)$kid['name'];
+  }
+
+  echo '<!doctype html><html lang="en"><head><meta charset="utf-8">';
   echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
   echo '<title>'.gb2_h($title).'</title>';
   echo '<link rel="stylesheet" href="/assets/css/app.css">';
   echo '</head><body><div class="container">';
 
-  // Simple topbar: brand + optional badge (nav remains the pretty bar)
+  // Top bar: consistent brand + screen title + optional kid badge
   echo '<div class="topbar">';
-  echo '<div class="brand"><a href="'.($isAdmin ? '/admin/dashboard.php' : '/app/dashboard.php').'">'.gb2_h($isAdmin ? 'GB2 Admin' : 'GB2').'</a></div>';
-  if ($kidName !== '') {
-    echo '<div class="badge">Kid: '.gb2_h($kidName).'</div>';
+  echo '  <div class="brand"><a href="/">GB2</a></div>';
+  echo '  <div class="badge">'.gb2_h($title).'</div>';
+  if ($kidBadge !== '') {
+    echo '  <div class="badge">'.gb2_h($kidBadge).'</div>';
   }
   echo '</div>';
 }
