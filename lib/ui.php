@@ -10,6 +10,7 @@ function gb2_nav(string $active): void {
 
   // Kid navigation (default)
   $items = [
+    ['key'=>'dashboard','href'=>'/app/dashboard.php','label'=>'Dashboard'],
     ['key'=>'today','href'=>'/app/today.php','label'=>'Today'],
     ['key'=>'bonuses','href'=>'/app/bonuses.php','label'=>'Bonuses'],
     ['key'=>'history','href'=>'/app/history.php','label'=>'History'],
@@ -17,35 +18,50 @@ function gb2_nav(string $active): void {
 
   // Admin-only items
   if ($admin) {
+    $items[] = ['key'=>'family','href'=>'/admin/family.php','label'=>'Family'];
+    $items[] = ['key'=>'grounding','href'=>'/admin/grounding.php','label'=>'Grounding'];
     $items[] = ['key'=>'review','href'=>'/admin/review.php','label'=>'Review'];
     $items[] = ['key'=>'setup','href'=>'/admin/setup.php','label'=>'Setup'];
-  }
-
-  // If nobody is logged in yet, show Login as a hint (non-blocking)
-  if (!$kid && !$admin) {
-    $items[] = ['key'=>'login','href'=>'/app/login.php','label'=>'Login'];
+    $items[] = ['key'=>'kidview','href'=>'/app/today.php','label'=>'Kid View'];
+    $items[] = ['key'=>'logout','href'=>'/admin/logout.php','label'=>'Lock'];
+  } elseif ($kid) {
+    $items[] = ['key'=>'logout','href'=>'/app/logout.php','label'=>'Log out'];
+  } else {
+    // Not logged in: keep roles explicit
+    $items[] = ['key'=>'login','href'=>'/app/login.php','label'=>'Kid Login'];
+    $items[] = ['key'=>'admin','href'=>'/admin/login.php','label'=>'Parent/Guardian'];
   }
 
   echo '<div class="nav"><div class="wrap">';
   foreach ($items as $it) {
-    $cls = ($it['key']===$active) ? 'active' : '';
+    $cls = ($it['key'] === $active) ? 'active' : '';
     echo '<a class="'.$cls.'" href="'.gb2_h($it['href']).'"><div>•</div><div>'.gb2_h($it['label']).'</div></a>';
   }
   echo '</div></div>';
 }
 
-
 function gb2_page_start(string $title, ?array $kid = null): void {
   gb2_secure_headers();
   gb2_session_start();
-  $who = $kid ? ('Kid: '.$kid['name']) : '';
+
+  $kidName = ($kid && isset($kid['name'])) ? (string)$kid['name'] : '';
+  $isAdmin = (function_exists('gb2_admin_current') && gb2_admin_current());
+
   echo '<!doctype html><html><head><meta charset="utf-8">';
   echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
   echo '<title>'.gb2_h($title).'</title>';
   echo '<link rel="stylesheet" href="/assets/css/app.css">';
   echo '</head><body><div class="container">';
-  echo '<div class="topbar"><div class="brand">'.gb2_h($title).'</div>';
-  if ($who) echo '<div class="badge">'.gb2_h($who).'</div>';
+
+  // Topbar structure aligned with admin: brand left + optional badge right
+  // (Admin pages can keep using /admin/_nav.php; this is for pages using gb2_page_start)
+  echo '<div class="topbar">';
+  echo '<div class="brand"><a href="'.($isAdmin ? '/admin/dashboard.php' : '/app/dashboard.php').'">'.gb2_h($isAdmin ? 'GB2 Admin' : 'GB2').'</a></div>';
+
+  if ($kidName !== '') {
+    echo '<div class="badge">Kid: '.gb2_h($kidName).'</div>';
+  }
+
   echo '</div>';
 }
 
