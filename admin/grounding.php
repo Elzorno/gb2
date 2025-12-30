@@ -7,20 +7,24 @@ require_once __DIR__ . '/../lib/kids.php';
 require_once __DIR__ . '/../lib/csrf.php';
 require_once __DIR__ . '/../lib/db.php';
 
+gb2_db_init();
 gb2_admin_require();
-$pdo = gb2_pdo();
 
+$pdo  = gb2_pdo();
 $kids = gb2_kids_all();
-$csrf = gb2_csrf_token();
 
 function pv_row(PDO $pdo, int $kidId): array {
   $st = $pdo->prepare("SELECT * FROM privileges WHERE kid_id=?");
   $st->execute([$kidId]);
   $r = $st->fetch(PDO::FETCH_ASSOC);
   return $r ?: [
-    'kid_id'=>$kidId,
-    'phone_locked'=>0,'games_locked'=>0,'other_locked'=>0,
-    'bank_phone_min'=>0,'bank_games_min'=>0,'bank_other_min'=>0
+    'kid_id' => $kidId,
+    'phone_locked' => 0,
+    'games_locked' => 0,
+    'other_locked' => 0,
+    'bank_phone_min' => 0,
+    'bank_games_min' => 0,
+    'bank_other_min' => 0,
   ];
 }
 
@@ -47,21 +51,23 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
          bank_phone_min=excluded.bank_phone_min,
          bank_games_min=excluded.bank_games_min,
          bank_other_min=excluded.bank_other_min"
-    )->execute([$kidId,$phone,$games,$other,$bank_phone,$bank_games,$bank_other]);
+    )->execute([$kidId, $phone, $games, $other, $bank_phone, $bank_games, $bank_other]);
   }
 
   header("Location: /admin/grounding.php?saved=1");
   exit;
 }
 
-gb2_page_start('Privileges', null);
+gb2_page_start('Grounding', null);
+$tok = gb2_csrf_token();
 ?>
+
 <div class="card">
-  <div class="h1">Privileges</div>
-  <div class="h2">Locks + banked minutes</div>
+  <div class="h1">Grounding / Privileges</div>
+  <div class="h2">Locks and banked minutes for each kid</div>
 
   <div class="note" style="margin-top:10px">
-    Keep this simple: lock/unlock access and track banked minutes. (No surprise changes.)
+    This is the “grounding board” core: per-kid locks + minute banks.
   </div>
 
   <?php if (isset($_GET['saved'])): ?>
@@ -71,25 +77,48 @@ gb2_page_start('Privileges', null);
 
 <?php foreach ($kids as $k): $pv = pv_row($pdo, (int)$k['id']); ?>
   <form class="card" method="post" action="/admin/grounding.php">
-    <input type="hidden" name="_csrf" value="<?= gb2_h($csrf) ?>">
+    <input type="hidden" name="_csrf" value="<?= gb2_h($tok) ?>">
     <input type="hidden" name="kid_id" value="<?= (int)$k['id'] ?>">
 
-    <div class="h1"><?= gb2_h((string)$k['name']) ?></div>
-    <div class="h2">Locks</div>
-
-    <div class="grid" style="margin-top:10px">
-      <label class="check"><input type="checkbox" name="phone_locked" <?= ((int)$pv['phone_locked'] ? 'checked':'') ?>> Phone</label>
-      <label class="check"><input type="checkbox" name="games_locked" <?= ((int)$pv['games_locked'] ? 'checked':'') ?>> Games</label>
-      <label class="check"><input type="checkbox" name="other_locked" <?= ((int)$pv['other_locked'] ? 'checked':'') ?>> Other</label>
+    <div class="row">
+      <div class="kv">
+        <div class="h1"><?= gb2_h((string)$k['name']) ?></div>
+        <div class="h2">Locks + banks</div>
+      </div>
     </div>
 
-    <div style="height:12px"></div>
-    <div class="h2">Banked minutes</div>
+    <div style="height:10px"></div>
 
-    <div class="grid" style="margin-top:10px">
-      <label>Phone (min)<input class="input" type="number" min="0" name="bank_phone_min" value="<?= (int)$pv['bank_phone_min'] ?>"></label>
-      <label>Games (min)<input class="input" type="number" min="0" name="bank_games_min" value="<?= (int)$pv['bank_games_min'] ?>"></label>
-      <label>Other (min)<input class="input" type="number" min="0" name="bank_other_min" value="<?= (int)$pv['bank_other_min'] ?>"></label>
+    <div class="grid">
+      <label class="check">
+        <input type="checkbox" name="phone_locked" <?= ((int)$pv['phone_locked'] ? 'checked' : '') ?>>
+        Phone locked
+      </label>
+      <label class="check">
+        <input type="checkbox" name="games_locked" <?= ((int)$pv['games_locked'] ? 'checked' : '') ?>>
+        Games locked
+      </label>
+      <label class="check">
+        <input type="checkbox" name="other_locked" <?= ((int)$pv['other_locked'] ? 'checked' : '') ?>>
+        Other locked
+      </label>
+    </div>
+
+    <div style="height:10px"></div>
+
+    <div class="grid">
+      <label>
+        Bank phone (min)
+        <input class="input" type="number" min="0" name="bank_phone_min" value="<?= (int)$pv['bank_phone_min'] ?>">
+      </label>
+      <label>
+        Bank games (min)
+        <input class="input" type="number" min="0" name="bank_games_min" value="<?= (int)$pv['bank_games_min'] ?>">
+      </label>
+      <label>
+        Bank other (min)
+        <input class="input" type="number" min="0" name="bank_other_min" value="<?= (int)$pv['bank_other_min'] ?>">
+      </label>
     </div>
 
     <div style="height:12px"></div>
