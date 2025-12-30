@@ -34,10 +34,14 @@ $tok = gb2_csrf_token();
 
   <?php if (!$pending): ?>
     <div class="status approved" style="margin-top:12px">Nothing pending 🎉</div>
-    <div class="note" style="margin-top:10px">When a kid submits a photo, it will appear here until you approve or reject it.</div>
+    <div class="note" style="margin-top:10px">When a kid submits proof, it will appear here until you approve or reject it.</div>
   <?php endif; ?>
 
   <?php foreach ($pending as $p): ?>
+    <?php
+      $photoPath = (string)($p['photo_path'] ?? '');
+      $hasPhoto  = ($photoPath !== '' && $photoPath !== 'NO_PHOTO');
+    ?>
     <div class="card" style="margin:12px 0 0">
       <div class="row">
         <div class="kv">
@@ -50,8 +54,12 @@ $tok = gb2_csrf_token();
         <div class="status pending">pending</div>
       </div>
 
-      <div style="margin-top:10px">
-        <a class="btn" href="/data/<?= gb2_h((string)$p['photo_path']) ?>" target="_blank" rel="noopener">View photo</a>
+      <div style="margin-top:10px" class="row" style="gap:10px; flex-wrap:wrap; justify-content:flex-start">
+        <?php if ($hasPhoto): ?>
+          <a class="btn" href="/data/<?= gb2_h($photoPath) ?>" target="_blank" rel="noopener">View photo</a>
+        <?php else: ?>
+          <div class="badge">No photo submitted</div>
+        <?php endif; ?>
       </div>
 
       <form method="post" action="/api/approve.php" style="margin-top:10px" class="grid two">
