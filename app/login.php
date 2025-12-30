@@ -52,9 +52,6 @@ if (function_exists('gb2_kid_current') && gb2_kid_current()) {
   gb2_redirect('/app/dashboard.php');
 }
 
-// Kid-only page: admin state is not modified here (display hint only)
-$adminUnlocked = (function_exists('gb2_admin_current') && gb2_admin_current());
-
 // ---------- load kids list ----------
 $err = '';
 $kidId = '';
@@ -62,7 +59,6 @@ $pin = '';
 $kids = [];
 
 try {
-  // Your verified stable DB path (config resolution also exists, but DB path is known)
   $pdo = new PDO('sqlite:/var/www/data/app.sqlite', null, null, [
     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -70,7 +66,7 @@ try {
   $kids = $pdo->query("SELECT id, name FROM kids ORDER BY sort_order ASC, name COLLATE NOCASE ASC")->fetchAll();
 } catch (Throwable $e) {
   $kids = [];
-  $err = 'Database is not available right now. Please tell an admin.';
+  $err = 'Login is temporarily unavailable. Please tell a parent/guardian.';
 }
 
 // ---------- POST: authenticate via gb2_kid_login(int, pin) ----------
@@ -85,11 +81,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   } elseif ($pin === '') {
     $err = 'Please enter your PIN.';
   } else {
-    // Authoritative kid login function
     if (gb2_kid_login((int)$kidId, $pin)) {
       gb2_redirect('/app/dashboard.php');
     }
-    $err = 'That login didn’t match. Please try again.';
+    $err = 'That didn’t match. Please try again.';
   }
 }
 
@@ -123,19 +118,12 @@ $title = 'Kid Login';
 <body>
   <div class="topbar">
     <div><strong>GB2</strong></div>
-    <div><a href="/admin/login.php" title="Admins unlock here">Admin unlock</a></div>
+    <div><a href="/admin/login.php" title="Parent/Guardian unlock">Parent/Guardian</a></div>
   </div>
 
   <div class="card">
     <h1 style="margin: 0 0 6px 0; font-size: 22px;"><?= htmlspecialchars($title, ENT_QUOTES) ?></h1>
-    <div class="hint">This page is for kids. Parents/guardians unlock at <a href="/admin/login.php">Admin unlock</a>.</div>
-
-    <?php if ($adminUnlocked): ?>
-      <div class="hint" style="margin-top:10px;">
-        Admin is currently unlocked on this device.
-        (<a href="/admin/family.php">Go to Admin</a>)
-      </div>
-    <?php endif; ?>
+    <div class="hint">Choose your name, then enter your PIN.</div>
 
     <?php if ($err !== ''): ?>
       <div class="err"><?= htmlspecialchars($err, ENT_QUOTES) ?></div>
@@ -161,7 +149,7 @@ $title = 'Kid Login';
 
       <div class="row">
         <label for="pin">PIN</label>
-        <input id="pin" name="pin" type="password" inputmode="numeric" placeholder="••••" required>
+        <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••" required>
       </div>
 
       <div class="row">
