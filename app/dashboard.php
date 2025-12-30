@@ -1,78 +1,98 @@
 <?php
 declare(strict_types=1);
+
 require_once __DIR__ . '/../lib/auth.php';
-require_once __DIR__ . '/../lib/kids.php';
-require_once __DIR__ . '/../lib/rotation.php';
-require_once __DIR__ . '/../lib/bonuses.php';
 require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/../lib/ui.php';
+require_once __DIR__ . '/../lib/rotation.php';
+require_once __DIR__ . '/../lib/privileges.php'; // if present in your build
 
 $kid = gb2_kid_require();
 
-$pdo = gb2_pdo();
-$priv = $pdo->prepare("SELECT * FROM privileges WHERE kid_id=?");
-$priv->execute([(int)$kid['kid_id']]);
-$pv = $priv->fetch() ?: ['phone_locked'=>0,'games_locked'=>0,'other_locked'=>0,'bank_phone_min'=>0,'bank_games_min'=>0,'bank_other_min'=>0];
-
 $todayStr = (new DateTimeImmutable('today'))->format('Y-m-d');
-$dObj = new DateTimeImmutable($todayStr);
-$today = [];
-if (gb2_is_weekday($dObj)) {
-  gb2_rotation_generate_for_day($todayStr);
-  $today = gb2_assignments_for_kid_day((int)$kid['kid_id'], $todayStr);
-}
-$week = gb2_week_key();
-$bonus = gb2_bonus_instances_for_week($week);
+$dObj     = new DateTimeImmutable($todayStr);
 
-function yn($v){ return ((int)$v) ? 'Locked' : 'OK'; }
-?>
-<!doctype html>
-<html>
+$assignments = [];
+if (function_exists('gb2_is_weekday') && gb2_is_weekday($dObj)) {
+  if (function_exists('gb2_rotation_generate_for_day')) {
+    gb2_rotation_generate_for_day($todayStr);
+  }
+  if (function_exists('gb2_assignments_for_kid_day')) {
+    $assignments = gb2_assignments_for_kid_day((int)$kid['kid_id'], $todayStr);
+  }
+}
+
+/**
+ * Privileges / grounding status (best-effort: depends on your privileges lib functions)
+ */
+ = gb2_priv_get_for_kid((int));
+
+function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
+
+?><!doctype html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Dashboard</title>
-  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body>
-<?php gb2_ui_topbar('Dashboard', ['Today'=>'/app/today.php','Bonuses'=>'/app/bonuses.php','History'=>'/app/history.php','Logout'=>'/app/logout.php']); ?>
+<?php
+if (function_exists('gb2_ui_topbar')) {
+  echo gb2_ui_topbar('Dashboard', $kid);
+} else {
+  echo '<header style="padding:12px;border-bottom:1px solid #ddd"><strong>Dashboard</strong></header>';
+}
+?>
 
-<div class="container">
-  <div class="card">
-    <h2>Today</h2>
-    <p><strong><?= htmlspecialchars($kid['name']) ?></strong></p>
-    <div class="grid">
-      <div class="pill">Phone: <?= yn($pv['phone_locked']) ?></div>
-      <div class="pill">Games: <?= yn($pv['games_locked']) ?></div>
-      <div class="pill">Other: <?= yn($pv['other_locked']) ?></div>
+<main class="container" style="max-width:900px;margin:0 auto;padding:16px">
+
+  <section class="card" style="padding:14px;margin-bottom:14px">
+    <h2 style="margin:0 0 8px 0">Today</h2>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a class="btn" href="/app/today.php">Today View</a>
+      <a class="btn" href="/app/bonus.php">Bonus Chores</a>
+      <a class="btn" href="/app/history.php">History</a>
     </div>
-    <div class="grid">
-      <div class="pill">Bank Phone: <?= (int)$pv['bank_phone_min'] ?> min</div>
-      <div class="pill">Bank Games: <?= (int)$pv['bank_games_min'] ?> min</div>
-      <div class="pill">Bank Other: <?= (int)$pv['bank_other_min'] ?> min</div>
+
+    <div style="margin-top:12px">
+      <h3 style="margin:0 0 6px 0;font-size:1rem">Your chores</h3>
+      <?php if (!$assignments): ?>
+        <div class="muted">No weekday assignments for today.</div>
+      <?php else: ?>
+        <ul>
+          <?php foreach ($assignments as $a): ?>
+            <li><?= h((string)($a['slot_label'] ?? $a['chore_title'] ?? 'Chore')) ?></li>
+          <?php endforeach; ?>
+        </ul>
+      <?php endif; ?>
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>Chores</h2>
-    <p>Assigned today: <strong><?= htmlspecialchars($today['slot_title'] ?? '') ?></strong></p>
-    <p>Status: <?= htmlspecialchars($today['status'] ?? '—') ?></p>
-    <a class="btn" href="/app/today.php">Open Today View</a>
-  </div>
+  <section class="card" style="padding:14px;margin-bottom:14px">
+    <h2 style="margin:0 0 8px 0">Grounding / Privileges</h2>
 
-  <div class="card">
-    <h2>Bonus chores (this week)</h2>
-    <?php if (!$bonus): ?>
-      <p>No bonus chores yet.</p>
-    <?php else: ?>
-      <ul>
-        <?php foreach ($bonus as $b): ?>
-          <li><?= htmlspecialchars($b['title']) ?> — <?= $b['claimed_by_kid_id'] ? 'Claimed' : 'Available' ?></li>
-        <?php endforeach; ?>
+    <?php if (is_array($priv)): ?>
+      <ul style="margin:0;padding-left:18px">
+        <li>Phone: <?= !empty($priv['phone_locked']) ? 'Locked' : 'Allowed' ?></li>
+        <li>Games: <?= !empty($priv['games_locked']) ? 'Locked' : 'Allowed' ?></li>
+        <li>Other: <?= !empty($priv['other_locked']) ? 'Locked' : 'Allowed' ?></li>
       </ul>
+      <div class="muted" style="margin-top:8px">
+        Banks: Phone <?= (int)( ?? 0) ?> • Games <?= (int)( ?? 0) ?> • Other <?= (int)( ?? 0) ?>
+      </div>
+    <?php else: ?>
+      <div class="muted">
+        Privileges module is not returning data yet (dashboard is running, but we need to align function names in <code>lib/privileges.php</code>).
+      </div>
     <?php endif; ?>
-    <a class="btn" href="/app/bonuses.php">Bonus chores</a>
-  </div>
-</div>
+
+    <div style="margin-top:10px">
+      <a class="btn" href="/admin/grounding.php">Admin: Manage Privileges</a>
+    </div>
+  </section>
+
+</main>
 </body>
 </html>

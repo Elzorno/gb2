@@ -20,7 +20,7 @@ function pv_row(PDO $pdo, int $kidId): array {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  gb2_csrf_require();
+  gb2_csrf_verify();
   $kidId = (int)($_POST['kid_id'] ?? 0);
   if ($kidId>0) {
     $phone = isset($_POST['phone_locked']) ? 1 : 0;
