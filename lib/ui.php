@@ -6,85 +6,18 @@ require_once __DIR__ . '/csrf.php';
 require_once __DIR__ . '/auth.php';
 
 /**
- * Read a one-time, redirect-safe flash message from query params.
- * Supported:
- *   - ?ok=Message
- *   - ?err=Message
- *   - ?saved=1   (maps to ok="Saved.")
- *
- * Returns: ['ok'=>string,'err'=>string]
+ * Render flash messages from querystring (?ok=... or ?err=...).
+ * Deterministic + curl-testable.
  */
-function gb2_flash_from_query(): array {
-  $ok = '';
-  $err = '';
-
-  if (isset($_GET['saved']) && (string)$_GET['saved'] === '1') {
-    $ok = 'Saved.';
-  }
-
-  if (isset($_GET['ok'])) {
-    $ok = trim((string)$_GET['ok']);
-  }
-
-  if (isset($_GET['err'])) {
-    $err = trim((string)$_GET['err']);
-  }
-
-  // Keep messages short and safe.
-  $ok  = mb_substr($ok, 0, 160);
-  $err = mb_substr($err, 0, 160);
-
-  return ['ok' => $ok, 'err' => $err];
-}
-
-/**
- * Render flash banners in the shared UI style.
- */
-function gb2_flash_render(array $flash): void {
-  $ok = (string)($flash['ok'] ?? '');
-  $err = (string)($flash['err'] ?? '');
+function gb2_flash_render(): void {
+  $ok  = isset($_GET['ok'])  ? trim((string)$_GET['ok'])  : '';
+  $err = isset($_GET['err']) ? trim((string)$_GET['err']) : '';
 
   if ($ok !== '') {
-    echo '<div class="notice ok">'.gb2_h($ok).'</div>';
+    echo '<div class="status approved" style="margin-top:12px">' . gb2_h($ok) . '</div>';
   }
   if ($err !== '') {
-    echo '<div class="notice bad">'.gb2_h($err).'</div>';
-  }
-}
-
-/**
- * User-facing status labels (do NOT change DB values).
- * Keeps CSS class as the raw status string (open/pending/approved/rejected),
- * but displays friendly text.
- */
-function gb2_status_label(string $status): string {
-  $s = strtolower(trim($status));
-  return match ($s) {
-    'open'     => 'Open',
-    'pending'  => 'Waiting for review',
-    'approved' => 'Approved',
-    'rejected' => 'Rejected',
-    default    => ($status !== '' ? $status : '—'),
-  };
-}
-
-/**
- * Friendly date helpers.
- */
-function gb2_human_date(string $ymd): string {
-  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ymd)) return $ymd;
-  $d = new DateTimeImmutable($ymd);
-  return $d->format('D, M j');
-}
-
-function gb2_human_datetime(string $iso): string {
-  $iso = trim($iso);
-  if ($iso === '') return '';
-  try {
-    $d = new DateTimeImmutable($iso);
-    return $d->format('D, M j g:ia');
-  } catch (Throwable $e) {
-    return $iso;
+    echo '<div class="status rejected" style="margin-top:12px">' . gb2_h($err) . '</div>';
   }
 }
 
@@ -121,7 +54,6 @@ function gb2_nav(string $active): void {
       ['key'=>'logout','href'=>'/app/logout.php','label'=>'Log out'],
     ];
   } else {
-    // Logged out: show a single non-blocking entry point.
     $items = [
       ['key'=>'login','href'=>'/app/login.php','label'=>'Kid Login'],
     ];
@@ -137,7 +69,6 @@ function gb2_nav(string $active): void {
 
 /**
  * Shared page chrome. Uses sitewide CSS at /assets/css/app.css.
- * Keeps UI calm + consistent across kid/admin pages.
  */
 function gb2_page_start(string $title, ?array $kid = null): void {
   gb2_secure_headers();
