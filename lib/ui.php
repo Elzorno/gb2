@@ -53,12 +53,45 @@ function gb2_nav(string $active): void {
 }
 
 /**
+ * Admin-only cache control to reduce stale-page confusion during rapid iteration.
+ * No infra changes; headers are per-response.
+ */
+function gb2_admin_no_cache_headers(): void {
+  if (headers_sent()) return;
+
+  header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+  header('Cache-Control: post-check=0, pre-check=0', false); // legacy proxies
+  header('Pragma: no-cache');
+  header('Expires: 0');
+}
+
+/**
+ * Optional helper: read simple "flash" messages from query string.
+ * (Not required for existing pages; safe to add now for later polish.)
+ */
+function gb2_flash_from_query(): array {
+  $ok  = (string)($_GET['ok'] ?? '');
+  $err = (string)($_GET['err'] ?? '');
+  $saved = (string)($_GET['saved'] ?? '');
+
+  if ($saved === '1' && $ok === '') $ok = 'Saved.';
+
+  return ['ok' => $ok, 'err' => $err];
+}
+
+/**
  * Shared page chrome. Uses sitewide CSS at /assets/css/app.css.
  * Keeps UI calm + consistent across kid/admin pages.
  */
 function gb2_page_start(string $title, ?array $kid = null): void {
   gb2_secure_headers();
   gb2_session_start();
+
+  // Admin pages: aggressively disable caching at the PHP response level.
+  $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+  if (strncmp($uri, '/admin/', 7) === 0) {
+    gb2_admin_no_cache_headers();
+  }
 
   $admin = gb2_admin_current();
   $brandHref = $admin ? '/admin/dashboard.php' : '/app/dashboard.php';
