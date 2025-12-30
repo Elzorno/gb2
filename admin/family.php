@@ -1,9 +1,8 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../lib/common.php';
-require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/ui.php';
+require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/../lib/kids.php';
 require_once __DIR__ . '/../lib/rotation.php';
@@ -11,8 +10,7 @@ require_once __DIR__ . '/../lib/bonuses.php';
 require_once __DIR__ . '/../lib/privileges.php';
 require_once __DIR__ . '/../lib/csrf.php';
 
-gb2_session_start();
-gb2_secure_headers();
+gb2_db_init();
 gb2_admin_require();
 
 $pdo = gb2_pdo();
@@ -25,21 +23,26 @@ $flash = '';
 $err = '';
 
 // --- POST actions (admin-only, CSRF protected) ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
   gb2_csrf_verify();
 
   $action = (string)($_POST['action'] ?? '');
   $kidId  = (int)($_POST['kid_id'] ?? 0);
 
-  if ($kidId <= 0) {
-    $err = 'Invalid kid.';
-  } elseif ($action === 'reset_pin') {
-    // Reset by clearing pin_hash; kid will create a new PIN on next login.
-    $st = $pdo->prepare("UPDATE kids SET pin_hash=NULL WHERE id=?");
-    $st->execute([$kidId]);
-    $flash = 'Kid PIN reset. They will create a new PIN on next login.';
-  } else {
-    $err = 'Unknown action.';
+  try {
+    if ($kidId <= 0) {
+      $err = 'Invalid kid.';
+    } elseif ($action === 'reset_pin') {
+      // kids.pin_hash is TEXT NOT NULL DEFAULT '' -> reset to empty string, never NULL
+      $st = $pdo->prepare("UPDATE kids SET pin_hash='' WHERE id=?");
+      $st->execute([$kidId]);
+      $flash = 'Kid PIN reset. They will create a new PIN on next login.';
+    } else {
+      $err = 'Unknown action.';
+    }
+  } catch (Throwable $e) {
+    // Don’t 500. Show a safe message.
+    $err = 'Action failed. Please try again.';
   }
 }
 
@@ -47,48 +50,32 @@ $kids = gb2_kids_all();
 $weekBonusRows = gb2_bonus_list_week($weekStartYmd);
 
 function bonus_available_count_for_kid(int $kidId, array $rows): int {
-  // Best-effort: count rows belonging to kid that are not claimed.
   $count = 0;
   foreach ($rows as $r) {
     if (!is_array($r)) continue;
 
-    // Must match kid
     if (isset($r['kid_id']) && (int)$r['kid_id'] !== $kidId) continue;
     if (!isset($r['kid_id']) && isset($r['kid']) && (int)$r['kid'] !== $kidId) continue;
 
-    // Determine claim status
     if (isset($r['claimed_by_kid_id']) && (int)$r['claimed_by_kid_id'] === 0) { $count++; continue; }
     if (isset($r['claimed_by_kid']) && (int)$r['claimed_by_kid'] === 0) { $count++; continue; }
     if (isset($r['status']) && (string)$r['status'] === 'available') { $count++; continue; }
-
-    // If unclear, do not count (avoid overstating)
   }
   return $count;
 }
 
 gb2_page_start('Family Dashboard');
-gb2_nav('family');
-?>
-<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin:0 0 10px 0;">
-  <a class="btn" href="/admin/logout.php">Admin Logout</a>
-  <a class="btn" href="/app/login.php">Kid Login</a>
-</div>
-<?php
 ?>
 <div style="margin:.25rem 0 1rem 0; color:#666; font-size:.95rem;">
   Today: <?= gb2_h($today->format('l, M j')) ?>
 </div>
 
 <?php if ($flash): ?>
-  <div style="background:#e7f7ee;border:1px solid #bfe8d1;padding:.75rem;border-radius:12px;margin:0 0 1rem 0;">
-    <?= gb2_h($flash) ?>
-  </div>
+  <div class="status approved" style="margin:0 0 1rem 0;"><?= gb2_h($flash) ?></div>
 <?php endif; ?>
 
 <?php if ($err): ?>
-  <div style="background:#fff3cd;border:1px solid #ffeeba;padding:.75rem;border-radius:12px;margin:0 0 1rem 0;">
-    <?= gb2_h($err) ?>
-  </div>
+  <div class="status pending" style="margin:0 0 1rem 0;"><?= gb2_h($err) ?></div>
 <?php endif; ?>
 
 <style>
@@ -126,7 +113,7 @@ gb2_nav('family');
       <h2><?= gb2_h($kidName) ?></h2>
 
       <form method="post" style="margin:0" onsubmit="return confirm('Reset PIN for <?= gb2_h($kidName) ?>? They will need to create a new PIN next login.');">
-        <input type="hidden" name="_csrf" value="<?= gb2_csrf_token() ?>">
+        <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
         <input type="hidden" name="action" value="reset_pin">
         <input type="hidden" name="kid_id" value="<?= (int)$kidId ?>">
         <button class="btn-sm" type="submit">Reset PIN</button>
@@ -187,4 +174,4 @@ gb2_nav('family');
   </div>
 <?php endforeach; ?>
 
-<?php gb2_page_end(); ?>
+<?php gb2_nav('family'); gb2_page_end(); ?>

@@ -8,28 +8,34 @@ function gb2_nav(string $active): void {
   $kid = gb2_kid_current();
   $admin = gb2_admin_current();
 
-  // Kid navigation (default)
-  $items = [
-    ['key'=>'dashboard','href'=>'/app/dashboard.php','label'=>'Dashboard'],
-    ['key'=>'today','href'=>'/app/today.php','label'=>'Today'],
-    ['key'=>'bonuses','href'=>'/app/bonuses.php','label'=>'Bonuses'],
-    ['key'=>'history','href'=>'/app/history.php','label'=>'History'],
-  ];
+  $items = [];
 
-  // Admin-only items
   if ($admin) {
-    $items[] = ['key'=>'family','href'=>'/admin/family.php','label'=>'Family'];
-    $items[] = ['key'=>'grounding','href'=>'/admin/grounding.php','label'=>'Grounding'];
-    $items[] = ['key'=>'review','href'=>'/admin/review.php','label'=>'Review'];
-    $items[] = ['key'=>'setup','href'=>'/admin/setup.php','label'=>'Setup'];
-    $items[] = ['key'=>'kidview','href'=>'/app/today.php','label'=>'Kid View'];
-    $items[] = ['key'=>'logout','href'=>'/admin/logout.php','label'=>'Lock'];
+    // Admin nav (admin-first, same "pretty" style as kid nav)
+    $items = [
+      ['key'=>'dashboard','href'=>'/admin/dashboard.php','label'=>'Dashboard'],
+      ['key'=>'family','href'=>'/admin/family.php','label'=>'Family'],
+      ['key'=>'setup','href'=>'/admin/setup.php','label'=>'Setup'],
+      ['key'=>'review','href'=>'/admin/review.php','label'=>'Review'],
+      ['key'=>'grounding','href'=>'/admin/grounding.php','label'=>'Grounding'],
+      ['key'=>'kidview','href'=>'/app/dashboard.php','label'=>'Kid View'],
+      ['key'=>'logout','href'=>'/admin/logout.php','label'=>'Lock'],
+    ];
   } elseif ($kid) {
-    $items[] = ['key'=>'logout','href'=>'/app/logout.php','label'=>'Log out'];
+    // Kid nav
+    $items = [
+      ['key'=>'dashboard','href'=>'/app/dashboard.php','label'=>'Dashboard'],
+      ['key'=>'today','href'=>'/app/today.php','label'=>'Today'],
+      ['key'=>'bonuses','href'=>'/app/bonuses.php','label'=>'Bonuses'],
+      ['key'=>'history','href'=>'/app/history.php','label'=>'History'],
+      ['key'=>'logout','href'=>'/app/logout.php','label'=>'Log out'],
+    ];
   } else {
     // Not logged in: keep roles explicit
-    $items[] = ['key'=>'login','href'=>'/app/login.php','label'=>'Kid Login'];
-    $items[] = ['key'=>'admin','href'=>'/admin/login.php','label'=>'Parent/Guardian'];
+    $items = [
+      ['key'=>'login','href'=>'/app/login.php','label'=>'Kid Login'],
+      ['key'=>'admin','href'=>'/admin/login.php','label'=>'Parent/Guardian'],
+    ];
   }
 
   echo '<div class="nav"><div class="wrap">';
@@ -53,15 +59,12 @@ function gb2_page_start(string $title, ?array $kid = null): void {
   echo '<link rel="stylesheet" href="/assets/css/app.css">';
   echo '</head><body><div class="container">';
 
-  // Topbar structure aligned with admin: brand left + optional badge right
-  // (Admin pages can keep using /admin/_nav.php; this is for pages using gb2_page_start)
+  // Simple topbar: brand + optional badge (nav remains the pretty bar)
   echo '<div class="topbar">';
   echo '<div class="brand"><a href="'.($isAdmin ? '/admin/dashboard.php' : '/app/dashboard.php').'">'.gb2_h($isAdmin ? 'GB2 Admin' : 'GB2').'</a></div>';
-
   if ($kidName !== '') {
     echo '<div class="badge">Kid: '.gb2_h($kidName).'</div>';
   }
-
   echo '</div>';
 }
 
