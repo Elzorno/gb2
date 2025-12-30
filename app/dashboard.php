@@ -2,8 +2,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../lib/ui.php';
-require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/../lib/auth.php';
+require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/../lib/rotation.php';
 require_once __DIR__ . '/../lib/privileges.php';
 
@@ -29,60 +29,48 @@ gb2_page_start('Dashboard', $kid);
 ?>
 <div class="card">
   <div class="h1">Today</div>
-  <div class="h2"><?= gb2_h($todayStr) ?></div>
+  <div class="h2"><?= gb2_h((new DateTimeImmutable('now'))->format('l, M j')) ?></div>
 
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-    <a class="btn" href="/app/today.php">Today View</a>
+  <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap">
+    <a class="btn primary" href="/app/today.php">Open Today</a>
     <a class="btn" href="/app/bonuses.php">Bonuses</a>
     <a class="btn" href="/app/history.php">History</a>
   </div>
 
-  <div style="margin-top:12px">
-    <div class="small" style="margin-bottom:6px">Your chores</div>
+  <div style="margin-top:14px">
+    <div class="small">Your chores</div>
     <?php if (!$assignments): ?>
-      <div class="note">No weekday assignments for today.</div>
+      <div class="note" style="margin-top:8px">No weekday chores are assigned for today.</div>
     <?php else: ?>
-      <ul style="margin:0;padding-left:18px">
+      <ul style="margin:8px 0 0 1.2rem">
         <?php foreach ($assignments as $a): ?>
-          <li><?= gb2_h((string)($a['slot_title'] ?? $a['slot_label'] ?? $a['chore_title'] ?? 'Chore')) ?></li>
+          <?php
+            $label = (string)($a['slot_title'] ?? $a['slot_label'] ?? $a['chore_title'] ?? 'Chore');
+          ?>
+          <li><?= gb2_h($label) ?></li>
         <?php endforeach; ?>
       </ul>
     <?php endif; ?>
   </div>
 </div>
 
-<div class="card" style="margin-top:12px">
-  <div class="h1">Grounding / Privileges</div>
-  <div class="h2">What’s allowed right now</div>
+<div class="card">
+  <div class="h1">Privileges</div>
+  <div class="h2">Current access</div>
 
   <div style="margin-top:10px">
-    <div class="row">
-      <div class="kv">
-        <div class="small">Phone</div>
-        <div class="h1"><?= ((int)$priv['phone_locked'] === 1) ? 'Locked' : 'Allowed' ?></div>
-      </div>
-    </div>
-
-    <div class="row">
-      <div class="kv">
-        <div class="small">Games</div>
-        <div class="h1"><?= ((int)$priv['games_locked'] === 1) ? 'Locked' : 'Allowed' ?></div>
-      </div>
-    </div>
-
-    <div class="row">
-      <div class="kv">
-        <div class="small">Other</div>
-        <div class="h1"><?= ((int)$priv['other_locked'] === 1) ? 'Locked' : 'Allowed' ?></div>
-      </div>
+    <div class="row" style="gap:10px; flex-wrap:wrap">
+      <div class="badge">Phone: <?= ((int)$priv['phone_locked'] === 1) ? 'Locked' : 'Allowed' ?></div>
+      <div class="badge">Games: <?= ((int)$priv['games_locked'] === 1) ? 'Locked' : 'Allowed' ?></div>
+      <div class="badge">Other: <?= ((int)$priv['other_locked'] === 1) ? 'Locked' : 'Allowed' ?></div>
     </div>
 
     <div class="note" style="margin-top:10px">
-      Banks: Phone <?= (int)$priv['bank_phone_min'] ?> • Games <?= (int)$priv['bank_games_min'] ?> • Other <?= (int)$priv['bank_other_min'] ?>
+      Banked time — Phone <?= (int)$priv['bank_phone_min'] ?> min • Games <?= (int)$priv['bank_games_min'] ?> min • Other <?= (int)$priv['bank_other_min'] ?> min
     </div>
 
-    <div class="small" style="margin-top:10px">
-      Parent/Guardian controls are under <a href="/admin/login.php">Parent/Guardian</a>.
+    <div class="note" style="margin-top:10px">
+      Need help? A parent/guardian can unlock from <a href="/admin/login.php">Parent/Guardian</a>.
     </div>
   </div>
 </div>

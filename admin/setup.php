@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+
 require_once __DIR__ . '/../lib/ui.php';
 require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/../lib/kids.php';
@@ -10,32 +11,31 @@ require_once __DIR__ . '/../lib/audit.php';
 
 gb2_db_init();
 
-$cfgPath = __DIR__ . '/../config.php';
-$cfg = gb2_config();
+$cfgPath  = __DIR__ . '/../config.php';
+$cfg      = gb2_config();
 $hasAdmin = !empty($cfg['admin_password_hash']);
 
-// After admin is set, require an unlock BEFORE showing any setup actions.
-// This prevents losing POST data due to auth redirects.
 if ($hasAdmin) { gb2_admin_require(); }
 
-$note = '';
+$note  = '';
 $error = '';
 
 $pdo = gb2_pdo();
 
-// Load current state for setup screens
-$kidsAll = gb2_kids_all(); // id, name
-$rule = gb2_rotation_rule_get_or_create_default();
-$ruleKids = json_decode((string)($rule['kids_json'] ?? '[]'), true) ?: [];
+// Current state
+$kidsAll   = gb2_kids_all();
+$rule      = gb2_rotation_rule_get_or_create_default();
+$ruleKids  = json_decode((string)($rule['kids_json'] ?? '[]'), true) ?: [];
 $ruleSlots = json_decode((string)($rule['slots_json'] ?? '[]'), true) ?: [];
 
-// If the rule kids don't match actual kids, prefer actual kids for the UI.
-$actualKidNames = array_map(fn($k)=> (string)$k['name'], $kidsAll);
-$kidNameSet = array_fill_keys($actualKidNames, true);
-$filteredRuleKids = array_values(array_filter($ruleKids, fn($n)=> isset($kidNameSet[(string)$n])));
-$missing = array_values(array_diff($actualKidNames, $filteredRuleKids));
-$uiKidsOrder = array_merge($filteredRuleKids, $missing);
+// Prefer actual kids for UI order
+$actualKidNames  = array_map(fn($k)=> (string)$k['name'], $kidsAll);
+$kidNameSet      = array_fill_keys($actualKidNames, true);
+$filteredRuleKids= array_values(array_filter($ruleKids, fn($n)=> isset($kidNameSet[(string)$n])));
+$missing         = array_values(array_diff($actualKidNames, $filteredRuleKids));
+$uiKidsOrder     = array_merge($filteredRuleKids, $missing);
 
+// Slot defaults
 $uiSlots = $ruleSlots;
 if (count($uiSlots) < 5) {
   $fallback = ['Dishes','Trash + Bathrooms','Help Cook','Common Areas','Help Everybody'];
@@ -62,7 +62,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
       }
       $export = "<?php\nreturn " . var_export($sample, true) . ";\n";
       file_put_contents($cfgPath, $export);
-      $note = 'Admin password set. Reload page.';
+      $note = 'Parent/guardian password saved.';
       gb2_audit('admin', 0, 'setup_set_admin', []);
       $hasAdmin = true;
     }
@@ -93,11 +93,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
       $kidMap = [];
       foreach (gb2_kids_all() as $k) { $kidMap[(int)$k['id']] = (string)$k['name']; }
+
       $kidNames = [];
-      foreach ($kidIds as $id) { if (isset($kidMap[$id])) { $kidNames[] = $kidMap[$id]; } }
+      foreach ($kidIds as $id) {
+        if (isset($kidMap[$id])) $kidNames[] = $kidMap[$id];
+      }
 
       $slots = $_POST['slot_titles'] ?? [];
-      if (!is_array($slots)) { $slots = []; }
+      if (!is_array($slots)) $slots = [];
       $slots = array_map(fn($s)=>trim((string)$s), $slots);
       $slots = array_values(array_filter($slots, fn($s)=>$s !== ''));
       $slots = array_slice($slots, 0, 10);
@@ -122,8 +125,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     gb2_admin_require();
 
     $title = trim((string)($_POST['bonus_title'] ?? ''));
-    $max = (int)($_POST['bonus_max_per_week'] ?? 1);
-    if ($max < 1) { $max = 1; }
+    $max   = (int)($_POST['bonus_max_per_week'] ?? 1);
+    if ($max < 1) $max = 1;
 
     if ($title === '') {
       $error = 'Bonus title is required.';
@@ -155,6 +158,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
       gb2_audit('admin', 0, 'setup_seed_bonus_defaults', ['count'=>count($defaults)]);
     }
   }
+
+  // Reload state after POST
+  $kidsAll   = gb2_kids_all();
+  $rule      = gb2_rotation_rule_get_or_create_default();
+  $ruleKids  = json_decode((string)($rule['kids_json'] ?? '[]'), true) ?: [];
+  $ruleSlots = json_decode((string)($rule['slots_json'] ?? '[]'), true) ?: [];
+  $bonusDefs = $pdo->query("SELECT * FROM bonus_defs ORDER BY sort_order ASC, id ASC")->fetchAll();
 }
 
 gb2_page_start('Setup');
@@ -162,129 +172,119 @@ $tok = gb2_csrf_token();
 ?>
 
 <div class="card">
-  <div class="h1">Initial setup</div>
-  <div class="note">Run once to set the parent/guardian password and create kids.</div>
+  <div class="h1">Setup</div>
+  <div class="h2">One calm step at a time</div>
 
-  <?php if ($note): ?><div class="status approved" style="margin-top:10px"><?=gb2_h($note)?></div><?php endif; ?>
-  <?php if ($error): ?><div class="status rejected" style="margin-top:10px"><?=gb2_h($error)?></div><?php endif; ?>
+  <?php if ($note): ?><div class="status approved" style="margin-top:12px"><?=gb2_h($note)?></div><?php endif; ?>
+  <?php if ($error): ?><div class="status rejected" style="margin-top:12px"><?=gb2_h($error)?></div><?php endif; ?>
 
   <?php if (!$hasAdmin): ?>
-    <hr>
-    <div class="h2">1) Set parent/guardian password</div>
-    <form method="post" class="grid">
+    <div style="height:10px"></div>
+    <div class="note">Set a parent/guardian password first.</div>
+
+    <form method="post" style="margin-top:12px">
       <input type="hidden" name="_csrf" value="<?=gb2_h($tok)?>">
       <input type="hidden" name="action" value="set_admin">
 
-      <div>
-        <label class="small">Password (min 10 characters)</label>
-        <input class="input" type="password" name="admin_password" required>
-      </div>
+      <label class="small">Parent/guardian password (min 10 chars)</label>
+      <input class="input" type="password" name="admin_password" required>
 
-      <div class="row" style="justify-content:flex-end; margin-top:8px">
-        <button class="btn primary" type="submit">Save password</button>
-      </div>
+      <div style="height:12px"></div>
+      <button class="btn primary" type="submit">Save password</button>
     </form>
   <?php else: ?>
-    <div class="status approved" style="margin-top:10px">Parent/guardian password is set.</div>
-    <div class="note">If you need to unlock, use <a href="/admin/login.php">Parent/Guardian Login</a>.</div>
+    <div class="status approved" style="margin-top:12px">Parent/guardian password is set.</div>
+    <div class="note" style="margin-top:10px">You can lock/unlock from the bottom nav.</div>
   <?php endif; ?>
 </div>
 
 <?php if ($hasAdmin): ?>
   <div class="card">
     <div class="h1">Kids</div>
-    <div class="note">Add kids and (optionally) set a PIN now. Recommended: 6 digits.</div>
+    <div class="h2">Names + PINs</div>
 
-    <form method="post" class="grid">
+    <form method="post" style="margin-top:12px">
       <input type="hidden" name="_csrf" value="<?=gb2_h($tok)?>">
       <input type="hidden" name="action" value="add_kid">
 
-      <div>
-        <label class="small">Name</label>
-        <input class="input" name="kid_name" required>
-      </div>
+      <label class="small">Name</label>
+      <input class="input" name="kid_name" required>
 
-      <div>
-        <label class="small">PIN (optional)</label>
-        <input class="input" name="kid_pin" inputmode="numeric" pattern="[0-9]*">
-      </div>
+      <div style="height:10px"></div>
+      <label class="small">PIN (optional now)</label>
+      <input class="input" name="kid_pin" inputmode="numeric" pattern="[0-9]*">
 
-      <div class="row" style="justify-content:flex-end; margin-top:8px">
-        <button class="btn ok" type="submit">Add kid</button>
-      </div>
+      <div style="height:12px"></div>
+      <button class="btn ok" type="submit">Add kid</button>
     </form>
 
-    <hr>
-    <div class="small">Existing kids</div>
-    <div class="row" style="gap:8px; flex-wrap:wrap; margin-top:8px">
+    <div style="height:12px"></div>
+    <div class="small">Existing kids:</div>
+    <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:10px">
       <?php foreach (gb2_kids_all() as $k): ?>
-        <div class="badge"><?=gb2_h($k['name'])?></div>
+        <div class="badge"><?=gb2_h((string)$k['name'])?></div>
       <?php endforeach; ?>
     </div>
   </div>
 
   <div class="card">
     <div class="h1">Weekday rotation</div>
-    <div class="note">Rotation uses kid <b>names</b>. Set the order once to keep assignments stable.</div>
+    <div class="h2">Mon–Fri chore slots</div>
+    <div class="note" style="margin-top:10px">
+      Rotation uses kid <b>names</b>. Set the order once and it stays stable.
+    </div>
 
-    <form method="post">
+    <?php
+      $kidsAll = gb2_kids_all();
+      $defaultIds = [];
+      foreach ($uiKidsOrder as $nm) {
+        foreach ($kidsAll as $k) if ((string)$k['name'] === (string)$nm) $defaultIds[] = (int)$k['id'];
+      }
+      if (count($defaultIds) < 1) foreach ($kidsAll as $k) $defaultIds[] = (int)$k['id'];
+    ?>
+
+    <form method="post" style="margin-top:12px">
       <input type="hidden" name="_csrf" value="<?=gb2_h($tok)?>">
       <input type="hidden" name="action" value="save_rotation">
 
-      <div style="margin-top:12px">
-        <div class="small" style="margin-bottom:6px">Kid order (top = first in rotation)</div>
+      <div class="small">Kid order (top = first)</div>
 
-        <?php
-          $kidsAll = gb2_kids_all();
-          $defaultIds = [];
-          foreach ($uiKidsOrder as $nm) {
-            foreach ($kidsAll as $k) if ((string)$k['name'] === (string)$nm) $defaultIds[] = (int)$k['id'];
-          }
-          if (count($defaultIds) < 1) {
-            foreach ($kidsAll as $k) $defaultIds[] = (int)$k['id'];
-          }
-        ?>
-
-        <div class="grid">
-          <?php foreach ($defaultIds as $i => $kidId): ?>
-            <div class="row" style="gap:10px; align-items:center">
-              <div class="badge" style="min-width:38px; text-align:center"><?= (int)($i+1) ?></div>
-              <select class="input" name="kid_order[]">
-                <?php foreach ($kidsAll as $k): ?>
-                  <option value="<?= (int)$k['id'] ?>" <?= ((int)$k['id']===(int)$kidId)?'selected':'' ?>>
-                    <?= gb2_h((string)$k['name']) ?>
-                  </option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-          <?php endforeach; ?>
+      <div style="height:8px"></div>
+      <?php foreach ($defaultIds as $i => $kidId): ?>
+        <div class="row" style="gap:10px; align-items:center; margin-top:10px">
+          <div class="badge" style="min-width:38px; text-align:center"><?= (int)($i+1) ?></div>
+          <select class="input" name="kid_order[]">
+            <?php foreach ($kidsAll as $k): ?>
+              <option value="<?= (int)$k['id'] ?>" <?= ((int)$k['id']===(int)$kidId)?'selected':'' ?>>
+                <?= gb2_h((string)$k['name']) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
         </div>
-      </div>
+      <?php endforeach; ?>
 
-      <hr>
+      <div style="height:16px"></div>
+      <div class="small">Chore slot titles (Mon–Fri)</div>
+      <div class="note" style="margin-top:6px">These are the labels kids will see.</div>
 
-      <div style="margin-top:12px">
-        <div class="small" style="margin-bottom:6px">Chore slot titles (Mon–Fri)</div>
-        <div class="grid">
-          <?php foreach ($uiSlots as $t): ?>
-            <div>
-              <input class="input" name="slot_titles[]" value="<?=gb2_h((string)$t)?>">
-            </div>
-          <?php endforeach; ?>
-        </div>
-      </div>
+      <div style="height:8px"></div>
+      <?php foreach ($uiSlots as $t): ?>
+        <input class="input" name="slot_titles[]" value="<?=gb2_h((string)$t)?>" style="margin-top:10px">
+      <?php endforeach; ?>
 
-      <div class="row" style="justify-content:flex-end; margin-top:12px">
-        <button class="btn primary" type="submit">Save rotation settings</button>
-      </div>
+      <div style="height:14px"></div>
+      <button class="btn primary" type="submit">Save rotation settings</button>
     </form>
   </div>
 
   <div class="card">
     <div class="h1">Bonus chores</div>
-    <div class="note">These are first-come weekly claims. You can seed defaults or add your own.</div>
+    <div class="h2">First-come, weekly</div>
+    <div class="note" style="margin-top:10px">
+      You can seed a starter set or add your own.
+    </div>
 
-    <form method="post" class="row" style="gap:10px; flex-wrap:wrap; margin-top:10px">
+    <form method="post" class="row" style="gap:10px; flex-wrap:wrap; margin-top:12px">
       <input type="hidden" name="_csrf" value="<?=gb2_h($tok)?>">
       <input type="hidden" name="action" value="seed_bonus_defaults">
       <button class="btn" type="submit">Seed defaults</button>
@@ -292,7 +292,7 @@ $tok = gb2_csrf_token();
 
     <div style="height:12px"></div>
 
-    <form method="post" class="grid two">
+    <form method="post" class="grid two" style="margin-top:6px">
       <input type="hidden" name="_csrf" value="<?=gb2_h($tok)?>">
       <input type="hidden" name="action" value="add_bonus_def">
 
@@ -312,9 +312,9 @@ $tok = gb2_csrf_token();
     </form>
 
     <?php if (!empty($bonusDefs)): ?>
-      <hr>
-      <div class="small">Current bonus chores</div>
-      <div class="row" style="gap:8px; flex-wrap:wrap; margin-top:8px">
+      <div style="height:12px"></div>
+      <div class="small">Current bonus chores:</div>
+      <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:10px">
         <?php foreach ($bonusDefs as $b): ?>
           <div class="badge"><?=gb2_h((string)$b['title'])?></div>
         <?php endforeach; ?>
@@ -323,12 +323,13 @@ $tok = gb2_csrf_token();
   </div>
 
   <div class="card">
-    <div class="h1">Finish</div>
-    <div class="note">Next steps: kid login → Today view → (optional) parent/guardian review queue.</div>
-    <div class="row" style="gap:10px; flex-wrap:wrap">
+    <div class="h1">Next</div>
+    <div class="h2">Kid login + daily flow</div>
+
+    <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:12px">
       <a class="btn primary" href="/app/login.php">Kid Login</a>
       <a class="btn" href="/app/today.php">Today</a>
-      <a class="btn" href="/admin/review.php">Review proofs</a>
+      <a class="btn" href="/admin/review.php">Review</a>
     </div>
   </div>
 <?php endif; ?>
