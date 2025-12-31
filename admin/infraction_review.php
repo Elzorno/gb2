@@ -54,8 +54,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
       if ($action === 'unlock') {
         foreach (['phone','games','other'] as $w) {
           if ((int)($blocks[$w] ?? 0) === 1) {
-            // will be supported once privileges.php is replaced to accept null
-            gb2_priv_set_lock_until($kidId, $w, null);
+            gb2_priv_set_lock_until($kidId, $w, null); // unlock
             $resolvedUntil[$w] = null;
           }
         }
@@ -71,6 +70,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
           $curIso = (string)($pv[$colUntil] ?? '');
           $curTs = $curIso ? strtotime($curIso) : 0;
 
+          // If current lock ends sooner than the target, keep it (don't extend)
           if ($curTs > 0 && $curTs < $targetTs) {
             $resolvedUntil[$w] = $curIso;
             continue;
@@ -79,6 +79,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
           gb2_priv_set_lock_until($kidId, $w, $targetIso);
           $resolvedUntil[$w] = $targetIso;
         }
+      } else {
+        $action = 'review_only';
       }
 
       if ($resetStrike === 1) {
@@ -97,39 +99,44 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
   }
 }
 
-$today = gmdate('Y-m-d');
-$in7 = gmdate('Y-m-d', time() + 7*86400);
+// We store review_on as ISO timestamps in this system (matches gb2_priv_iso_from_ts()).
+$nowIso = gb2_priv_iso_from_ts(time());
+$in7Iso = gb2_priv_iso_from_ts(time() + 7*86400);
 
 $dueNow = [];
 $upcoming = [];
 
 try {
-  $dueNow = $pdo->query("
+  $st = $pdo->prepare("
     SELECT e.*, d.code AS def_code, d.label AS def_label, k.name AS kid_name
     FROM infraction_events e
     JOIN infraction_defs d ON d.id=e.infraction_def_id
     JOIN kids k ON k.id=e.kid_id
     WHERE e.review_on IS NOT NULL
-      AND e.review_on <= " . $pdo->quote($today) . "
+      AND e.review_on <= ?
       AND (e.reviewed_at IS NULL OR e.reviewed_at='')
     ORDER BY e.review_on ASC, e.ts DESC
     LIMIT 200
-  ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  ");
+  $st->execute([$nowIso]);
+  $dueNow = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-  $upcoming = $pdo->query("
+  $st = $pdo->prepare("
     SELECT e.*, d.code AS def_code, d.label AS def_label, k.name AS kid_name
     FROM infraction_events e
     JOIN infraction_defs d ON d.id=e.infraction_def_id
     JOIN kids k ON k.id=e.kid_id
     WHERE e.review_on IS NOT NULL
-      AND e.review_on > " . $pdo->quote($today) . "
-      AND e.review_on <= " . $pdo->quote($in7) . "
+      AND e.review_on > ?
+      AND e.review_on <= ?
       AND (e.reviewed_at IS NULL OR e.reviewed_at='')
     ORDER BY e.review_on ASC, e.ts DESC
     LIMIT 200
-  ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  ");
+  $st->execute([$nowIso, $in7Iso]);
+  $upcoming = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
 } catch (Throwable $e) {
-  $err = $err ?: 'Review schema not ready (run migrations for reviewed_at columns).';
+  $err = $err ?: 'Review schema not ready.';
 }
 
 $tok = gb2_csrf_token();
@@ -147,7 +154,7 @@ gb2_page_start('Infraction Review', null);
   <?php endif; ?>
 
   <div class="note" style="margin-top:10px">
-    Use this to mark due items reviewed, optionally shorten/unlock the affected locks, and optionally reset strikes.
+    Review is due at <strong><?= gb2_h($nowIso) ?></strong>. Upcoming shows the next 7 days.
   </div>
 </div>
 
