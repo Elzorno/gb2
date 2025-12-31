@@ -192,10 +192,14 @@ function gb2_priv_extend_lock_until(int $kidId, string $which, int $minutes): vo
 }
 
 /**
- * Set an exact lock-until timestamp. Also sets the corresponding *_locked flag to 1.
- * Returns the until ISO actually written.
+ * Set an exact lock-until timestamp OR clear it.
+ *
+ * - If $untilIso is null: unlock (set *_locked=0 and *_locked_until=NULL)
+ * - If $untilIso is non-null: lock (set *_locked=1 and *_locked_until=$untilIso)
+ *
+ * Returns the until ISO written (or '' when unlocked).
  */
-function gb2_priv_set_lock_until(int $kidId, string $which, string $untilIso): string {
+function gb2_priv_set_lock_until(int $kidId, string $which, ?string $untilIso): string {
   if (!in_array($which, ['phone','games','other'], true)) {
     throw new InvalidArgumentException('Invalid lock type');
   }
@@ -206,17 +210,30 @@ function gb2_priv_set_lock_until(int $kidId, string $which, string $untilIso): s
   $colLocked = $which . "_locked";
   $colUntil  = $which . "_locked_until";
 
+  $hasUntil = true;
   try {
     $pdo->query("SELECT {$colUntil} FROM privileges LIMIT 1");
   } catch (Throwable $e) {
-    // No until columns -> fallback to simple boolean lock
+    $hasUntil = false;
+  }
+
+  if ($untilIso === null) {
+    // Unlock
+    if ($hasUntil) {
+      $pdo->prepare("UPDATE privileges SET {$colLocked}=0, {$colUntil}=NULL WHERE kid_id=?")->execute([$kidId]);
+    } else {
+      $pdo->prepare("UPDATE privileges SET {$colLocked}=0 WHERE kid_id=?")->execute([$kidId]);
+    }
+    return '';
+  }
+
+  // Lock
+  if (!$hasUntil) {
     $pdo->prepare("UPDATE privileges SET {$colLocked}=1 WHERE kid_id=?")->execute([$kidId]);
     return $untilIso;
   }
 
-  $pdo->prepare("UPDATE privileges
-                 SET {$colLocked}=1, {$colUntil}=?
-                 WHERE kid_id=?")
+  $pdo->prepare("UPDATE privileges SET {$colLocked}=1, {$colUntil}=? WHERE kid_id=?")
       ->execute([$untilIso, $kidId]);
 
   return $untilIso;
@@ -243,9 +260,14 @@ function gb2_priv_add_lock_minutes(int $kidId, string $which, int $minutes): str
   $colLocked = $which . "_locked";
   $colUntil  = $which . "_locked_until";
 
+  $hasUntil = true;
   try {
     $pdo->query("SELECT {$colUntil} FROM privileges LIMIT 1");
   } catch (Throwable $e) {
+    $hasUntil = false;
+  }
+
+  if (!$hasUntil) {
     $pdo->prepare("UPDATE privileges SET {$colLocked}=1 WHERE kid_id=?")->execute([$kidId]);
     return gb2_priv_iso_from_ts(time() + ($minutes * 60));
   }

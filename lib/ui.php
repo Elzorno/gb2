@@ -26,7 +26,7 @@ function gb2_flash_render(): void {
  *
  * Keys used by pages:
  * - Kid: dashboard, today, bonuses, rules, history, logout
- * - Admin: admindash, family, grounding, infractions, infraction_defs, rules, review, setup, kidview, lock
+ * - Admin: admindash, family, grounding, infractions, inf_review, infraction_defs, rules, review, setup, kidview, lock
  * - Logged out: login
  */
 function gb2_nav(string $active): void {
@@ -41,6 +41,7 @@ function gb2_nav(string $active): void {
       ['key'=>'family','href'=>'/admin/family.php','label'=>'Family'],
       ['key'=>'grounding','href'=>'/admin/grounding.php','label'=>'Privileges'],
       ['key'=>'infractions','href'=>'/admin/infractions.php','label'=>'Infractions'],
+      ['key'=>'inf_review','href'=>'/admin/infraction_review.php','label'=>'Inf Review'],
       ['key'=>'infraction_defs','href'=>'/admin/infraction_defs.php','label'=>'Defs'],
       ['key'=>'rules','href'=>'/app/rules.php','label'=>'Rules'],
       ['key'=>'review','href'=>'/admin/review.php','label'=>'Review'],

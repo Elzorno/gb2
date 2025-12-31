@@ -43,6 +43,22 @@ function gb2_inf_set_strikes(int $kidId, int $defId, int $count): void {
   ")->execute([$kidId, $defId, $count, gb2_now_iso()]);
 }
 
+function gb2_inf_reset_strike_for_event(int $kidId, int $defId): void {
+  $pdo = gb2_pdo();
+  $pdo->prepare("
+    INSERT INTO infraction_strikes(kid_id, infraction_def_id, strike_count, updated_at)
+    VALUES(?,?,0,?)
+    ON CONFLICT(kid_id, infraction_def_id) DO UPDATE SET
+      strike_count=0,
+      updated_at=excluded.updated_at
+  ")->execute([$kidId, $defId, gb2_now_iso()]);
+
+  gb2_audit('admin', 0, 'infraction.strike_reset', [
+    'kid_id' => $kidId,
+    'infraction_def_id' => $defId,
+  ]);
+}
+
 function gb2_inf_decode_json_array(string $json): array {
   $v = json_decode($json, true);
   return is_array($v) ? $v : [];
@@ -91,6 +107,52 @@ function gb2_inf_compute_review_days(array $def, int $daysApplied): int {
 }
 
 /**
+ * Mark an infraction event as reviewed (and record what resolution was done).
+ * Requires v3 migration columns.
+ */
+function gb2_inf_mark_event_reviewed(
+  int $eventId,
+  string $actorType,
+  int $actorId,
+  string $reviewNote,
+  string $reviewAction,
+  array $resolvedUntil
+): void {
+  $pdo = gb2_pdo();
+
+  $reviewAction = trim($reviewAction);
+  if (!in_array($reviewAction, ['review_only','unlock','shorten'], true)) {
+    $reviewAction = 'review_only';
+  }
+
+  $pdo->prepare("
+    UPDATE infraction_events
+    SET reviewed_at=?,
+        reviewed_by_actor_type=?,
+        reviewed_by_actor_id=?,
+        review_note=?,
+        review_action=?,
+        review_resolved_until_json=?
+    WHERE id=?
+  ")->execute([
+    gb2_now_iso(),
+    $actorType,
+    $actorId,
+    $reviewNote,
+    $reviewAction,
+    json_encode($resolvedUntil),
+    $eventId
+  ]);
+
+  gb2_audit($actorType, $actorId, 'infraction.review', [
+    'event_id' => $eventId,
+    'review_action' => $reviewAction,
+    'review_note' => $reviewNote,
+    'resolved_until' => $resolvedUntil,
+  ]);
+}
+
+/**
  * Preview an infraction application without mutating DB.
  */
 function gb2_inf_preview(int $kidId, int $defId): array {
@@ -102,7 +164,7 @@ function gb2_inf_preview(int $kidId, int $defId): array {
 
   $daysApplied = gb2_inf_compute_days($def, $strikeAfter);
   $reviewDays = gb2_inf_compute_review_days($def, $daysApplied);
-  $reviewOn = $reviewDays > 0 ? gb2_priv_iso_from_ts(time() + ($reviewDays * 86400)) : null;
+  $reviewOn = $reviewDays > 0 ? gmdate('Y-m-d', time() + ($reviewDays * 86400)) : null;
 
   $mode = (string)($def['mode'] ?? 'set');
   if ($mode !== 'set' && $mode !== 'add') $mode = 'set';
@@ -170,7 +232,7 @@ function gb2_inf_apply(
   $minutes = $daysApplied * 1440;
 
   $reviewDays = gb2_inf_compute_review_days($def, $daysApplied);
-  $reviewOn = $reviewDays > 0 ? gb2_priv_iso_from_ts(time() + ($reviewDays * 86400)) : null;
+  $reviewOn = $reviewDays > 0 ? gmdate('Y-m-d', time() + ($reviewDays * 86400)) : null;
 
   $computedUntil = [];
 

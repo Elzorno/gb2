@@ -46,6 +46,7 @@ function gb2_db_column_exists(PDO $pdo, string $table, string $col): bool {
  *
  * v1: add privileges lock-until columns.
  * v2: infractions (defs, strikes, events).
+ * v3: infractions review workflow columns on infraction_events.
  */
 function gb2_db_migrate(PDO $pdo): void {
   $pdo->exec("PRAGMA foreign_keys=ON;");
@@ -135,6 +136,41 @@ CREATE TABLE IF NOT EXISTS infraction_events(
       $pdo->exec("CREATE INDEX IF NOT EXISTS idx_inf_defs_active_sort ON infraction_defs(active, sort_order, label);");
 
       gb2_db_set_user_version($pdo, 2);
+      $pdo->commit();
+    } catch (Throwable $e) {
+      if ($pdo->inTransaction()) $pdo->rollBack();
+      throw $e;
+    }
+  }
+
+  // --- v3: add review workflow columns to infraction_events ---
+  if ($v < 3) {
+    $pdo->beginTransaction();
+    try {
+      // Columns (idempotent)
+      if (!gb2_db_column_exists($pdo, 'infraction_events', 'reviewed_at')) {
+        $pdo->exec("ALTER TABLE infraction_events ADD COLUMN reviewed_at TEXT;");
+      }
+      if (!gb2_db_column_exists($pdo, 'infraction_events', 'reviewed_by_actor_type')) {
+        $pdo->exec("ALTER TABLE infraction_events ADD COLUMN reviewed_by_actor_type TEXT;");
+      }
+      if (!gb2_db_column_exists($pdo, 'infraction_events', 'reviewed_by_actor_id')) {
+        $pdo->exec("ALTER TABLE infraction_events ADD COLUMN reviewed_by_actor_id INTEGER NOT NULL DEFAULT 0;");
+      }
+      if (!gb2_db_column_exists($pdo, 'infraction_events', 'review_note')) {
+        $pdo->exec("ALTER TABLE infraction_events ADD COLUMN review_note TEXT;");
+      }
+      if (!gb2_db_column_exists($pdo, 'infraction_events', 'review_action')) {
+        $pdo->exec("ALTER TABLE infraction_events ADD COLUMN review_action TEXT;");
+      }
+      if (!gb2_db_column_exists($pdo, 'infraction_events', 'review_resolved_until_json')) {
+        $pdo->exec("ALTER TABLE infraction_events ADD COLUMN review_resolved_until_json TEXT NOT NULL DEFAULT '{}';");
+      }
+
+      // Index to efficiently find due/unreviewed items
+      $pdo->exec("CREATE INDEX IF NOT EXISTS idx_inf_events_review_due ON infraction_events(review_on, reviewed_at);");
+
+      gb2_db_set_user_version($pdo, 3);
       $pdo->commit();
     } catch (Throwable $e) {
       if ($pdo->inTransaction()) $pdo->rollBack();
