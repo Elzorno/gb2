@@ -8,14 +8,18 @@ require_once __DIR__ . '/../lib/auth.php';
 
 gb2_db_init();
 $kid = gb2_kid_require();
-$today = (new DateTimeImmutable('today'))->format('Y-m-d');
+
+$today    = (new DateTimeImmutable('today'))->format('Y-m-d');
 $weekStart = gb2_bonus_week_start($today);
 
+// Ensure weekly instances exist (same logic as your backup)
 $pdo = gb2_pdo();
 $st = $pdo->prepare("SELECT COUNT(*) as c FROM bonus_instances WHERE week_start=?");
 $st->execute([$weekStart]);
 $c = (int)($st->fetch()['c'] ?? 0);
-if ($c === 0) gb2_bonus_reset_week($weekStart);
+if ($c === 0) {
+  gb2_bonus_reset_week($weekStart);
+}
 
 $list = gb2_bonus_list_week($weekStart);
 
@@ -28,49 +32,74 @@ gb2_page_start('Bonuses', $kid);
   <?php gb2_flash_render(); ?>
 
   <?php foreach ($list as $b): ?>
+    <?php
+      $title   = (string)($b['title'] ?? 'Bonus');
+      $status  = (string)($b['status'] ?? 'available');
+      $instId  = (int)($b['instance_id'] ?? 0);
+
+      $rewardCents = (int)($b['reward_cents'] ?? 0);
+      $rPhone      = (int)($b['reward_phone_min'] ?? 0);
+      $rGames      = (int)($b['reward_games_min'] ?? 0);
+
+      $claimedBy   = (int)($b['claimed_by_kid'] ?? 0);
+      $kidId       = (int)($kid['kid_id'] ?? 0);
+    ?>
     <div class="card" style="margin:12px 0 0">
       <div class="row">
         <div class="kv">
-          <div class="h1"><?= gb2_h((string)$b['title']) ?></div>
+          <div class="h1"><?= gb2_h($title) ?></div>
           <div class="small">
             Reward:
-            <?php if ((int)$b['reward_cents'] > 0): ?> $<?= number_format(((int)$b['reward_cents'])/100, 2) ?><?php endif; ?>
-            <?php if ((int)$b['reward_phone_min'] > 0): ?> · +<?= (int)$b['reward_phone_min'] ?> min phone<?php endif; ?>
-            <?php if ((int)$b['reward_games_min'] > 0): ?> · +<?= (int)$b['reward_games_min'] ?> min games<?php endif; ?>
+            <?php if ($rewardCents > 0): ?>
+              $<?= number_format($rewardCents / 100, 2) ?>
+            <?php endif; ?>
+            <?php if ($rPhone > 0): ?>
+              · +<?= (int)$rPhone ?> min phone
+            <?php endif; ?>
+            <?php if ($rGames > 0): ?>
+              · +<?= (int)$rGames ?> min games
+            <?php endif; ?>
+            <?php if ($rewardCents <= 0 && $rPhone <= 0 && $rGames <= 0): ?>
+              (no reward configured)
+            <?php endif; ?>
           </div>
         </div>
-        <div class="status <?= gb2_h((string)$b['status']) ?>"><?= gb2_h((string)$b['status']) ?></div>
+
+        <div class="status <?= gb2_h($status) ?>"><?= gb2_h($status) ?></div>
       </div>
 
-      <?php if ((string)$b['status'] === 'available'): ?>
+      <?php if ($status === 'available'): ?>
         <form method="post" action="/api/claim_bonus.php" style="margin-top:10px">
           <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
-          <input type="hidden" name="instance_id" value="<?= (int)$b['instance_id'] ?>">
+          <input type="hidden" name="instance_id" value="<?= (int)$instId ?>">
           <button class="btn ok" type="submit">Claim</button>
         </form>
-      <?php elseif ((string)$b['status'] === 'claimed' && (int)$b['claimed_by_kid'] === (int)$kid['kid_id']): ?>
+
+      <?php elseif ($status === 'claimed' && $claimedBy === $kidId): ?>
+        <!-- Submit proof with photo -->
         <form method="post" action="/api/submit_proof.php" enctype="multipart/form-data" style="margin-top:10px">
           <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
           <input type="hidden" name="kind" value="bonus">
           <input type="hidden" name="week_start" value="<?= gb2_h($weekStart) ?>">
-          <input type="hidden" name="instance_id" value="<?= (int)$b['instance_id'] ?>">
+          <input type="hidden" name="instance_id" value="<?= (int)$instId ?>">
 
           <div class="small" style="margin-bottom:6px">Photo proof</div>
           <input class="input" type="file" name="photo" accept="image/*" required>
 
           <div style="height:10px"></div>
-          </form>
-
-          <form method="post" action="/api/submit_proof.php" style="margin-top:10px">
-            <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
-            <input type="hidden" name="kind" value="bonus">
-            <input type="hidden" name="week_start" value="<?= gb2_h($weekStart) ?>">
-            <input type="hidden" name="instance_id" value="<?= (int)$b[instance_id] ?>">
-            <input type="hidden" name="no_photo" value="1">
-            <button class="btn" type="submit">Verify without photo</button>
-          </form>
           <button class="btn primary" type="submit">Submit proof</button>
         </form>
+
+        <!-- Verify without photo (matches Today.php pattern) -->
+        <form method="post" action="/api/submit_proof.php" style="margin-top:10px">
+          <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
+          <input type="hidden" name="kind" value="bonus">
+          <input type="hidden" name="week_start" value="<?= gb2_h($weekStart) ?>">
+          <input type="hidden" name="instance_id" value="<?= (int)$instId ?>">
+          <input type="hidden" name="no_photo" value="1">
+          <button class="btn" type="submit">Verify without photo</button>
+        </form>
+
       <?php endif; ?>
     </div>
   <?php endforeach; ?>

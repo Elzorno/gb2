@@ -1,93 +1,177 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../lib/common.php';
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/csrf.php';
 require_once __DIR__ . '/../lib/db.php';
-require_once __DIR__ . '/../lib/bonuses.php';
+require_once __DIR__ . '/../lib/audit.php';
 require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/privileges.php';
-require_once __DIR__ . '/../lib/audit.php';
 
 gb2_db_init();
 gb2_admin_require();
-if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') { http_response_code(405); exit; }
-gb2_csrf_verify();
 
-$subId = (int)($_POST['sub_id'] ?? 0);
+function gb2_approve_log(string $msg): void {
+  $dir = gb2_data_dir();
+  if (!is_dir($dir)) @mkdir($dir, 0775, true);
+  @file_put_contents($dir . '/approve_fail.log', '[' . date('c') . '] ' . $msg . "\n", FILE_APPEND);
+}
+
+function gb2_bonus_instance_info(PDO $pdo, string $weekStart, int $instanceId): ?array {
+  // Join bonus_instances -> bonus_defs to get rewards + title in one query
+  $st = $pdo->prepare("
+    SELECT
+      bi.id            AS instance_id,
+      bi.week_start    AS week_start,
+      bi.status        AS status,
+      bi.claimed_by_kid AS claimed_by_kid,
+      bi.submission_id AS submission_id,
+      bd.id            AS bonus_def_id,
+      bd.title         AS title,
+      bd.reward_cents  AS reward_cents,
+      bd.reward_phone_min AS reward_phone_min,
+      bd.reward_games_min AS reward_games_min
+    FROM bonus_instances bi
+    JOIN bonus_defs bd ON bd.id = bi.bonus_def_id
+    WHERE bi.week_start = ?
+      AND bi.id = ?
+    LIMIT 1
+  ");
+  $st->execute([$weekStart, $instanceId]);
+  $row = $st->fetch(PDO::FETCH_ASSOC);
+  return $row ?: null;
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+  header('Location: /admin/review.php');
+  exit;
+}
+
+// CSRF
+try {
+  gb2_csrf_verify();
+} catch (Throwable $e) {
+  gb2_approve_log('csrf_fail ip=' . gb2_client_ip() . ' ua=' . gb2_user_agent() . ' err=' . $e->getMessage());
+  header('Location: /admin/review.php?err=' . urlencode('Security check failed.'));
+  exit;
+}
+
+// Inputs (match review.php)
+$subId    = (int)($_POST['sub_id'] ?? 0);
 $decision = (string)($_POST['decision'] ?? '');
-$note = trim((string)($_POST['note'] ?? ''));
+$noteRaw  = (string)($_POST['note'] ?? '');
+$note     = trim(substr($noteRaw, 0, 500));
 
-if ($subId <= 0 || !in_array($decision, ['approved','rejected'], true)) {
-  header('Location: /admin/review.php?err=' . urlencode('Invalid request.'));
+if ($subId <= 0 || ($decision !== 'approved' && $decision !== 'rejected')) {
+  gb2_approve_log('invalid_input sub_id=' . $subId . ' decision=' . $decision . ' post_keys=' . implode(',', array_keys($_POST)));
+  header('Location: /admin/review.php?err=' . urlencode('Invalid submission.'));
   exit;
 }
 
 $pdo = gb2_pdo();
 
-$st = $pdo->prepare("SELECT * FROM submissions WHERE id=?");
-$st->execute([$subId]);
-$sub = $st->fetch(PDO::FETCH_ASSOC);
-
-if (!$sub || (string)$sub['status'] !== 'pending') {
-  header('Location: /admin/review.php?err=' . urlencode('Already handled.'));
-  exit;
-}
-
-$kidId = (int)$sub['kid_id'];
-
-$pdo->beginTransaction();
 try {
-  $pdo->prepare("UPDATE submissions SET status=?, reviewed_at=?, reviewed_by_admin=1, notes=? WHERE id=?")
-      ->execute([$decision, gb2_now_iso(), $note, $subId]);
+  $pdo->beginTransaction();
 
-  if ($decision === 'rejected') {
-    if ((string)$sub['kind'] === 'base') {
-      $pdo->prepare("UPDATE assignments SET status='open', submission_id=NULL WHERE submission_id=?")
+  $st = $pdo->prepare("SELECT * FROM submissions WHERE id=?");
+  $st->execute([$subId]);
+  $sub = $st->fetch(PDO::FETCH_ASSOC);
+
+  if (!$sub) throw new RuntimeException('Submission not found id=' . $subId);
+
+  $kind   = (string)($sub['kind'] ?? '');
+  $status = (string)($sub['status'] ?? '');
+  $kidId  = (int)($sub['kid_id'] ?? 0);
+
+  if ($kidId <= 0) throw new RuntimeException('Invalid kid_id on submission id=' . $subId);
+  if ($status !== 'pending') throw new RuntimeException('Not pending id=' . $subId . ' status=' . $status);
+
+  // Update submission status + review metadata
+  $pdo->prepare("UPDATE submissions
+                   SET status=?,
+                       reviewed_at=?,
+                       reviewed_by_admin=1,
+                       notes=?
+                 WHERE id=?")
+      ->execute([$decision, gb2_now_iso(), ($note === '' ? null : $note), $subId]);
+
+  if ($kind === 'base') {
+    if ($decision === 'approved') {
+      $pdo->prepare("UPDATE assignments SET status='done' WHERE submission_id=?")
           ->execute([$subId]);
-    } elseif ((string)$sub['kind'] === 'bonus') {
-      $pdo->prepare("UPDATE bonus_instances SET status='claimed', submission_id=NULL WHERE submission_id=?")
+    } else {
+      $pdo->prepare("UPDATE assignments
+                       SET status='open', submission_id=NULL
+                     WHERE submission_id=?")
           ->execute([$subId]);
     }
-    gb2_audit('admin', 0, 'reject_submission', ['sub_id'=>$subId,'kid_id'=>$kidId,'kind'=>$sub['kind']]);
-    $pdo->commit();
-    header('Location: /admin/review.php?ok=' . urlencode('Rejected.'));
-    exit;
-  }
 
-  // approved
-  if ((string)$sub['kind'] === 'base') {
-    $pdo->prepare("UPDATE assignments SET status='done' WHERE submission_id=?")
-        ->execute([$subId]);
-  } elseif ((string)$sub['kind'] === 'bonus') {
-    $pdo->prepare("UPDATE bonus_instances SET status='done' WHERE submission_id=?")
-        ->execute([$subId]);
+  } elseif ($kind === 'bonus') {
+    if ($decision === 'approved') {
+      // Approved bonus stays approved
+      $pdo->prepare("UPDATE bonus_instances SET status='approved' WHERE submission_id=?")
+          ->execute([$subId]);
 
-    $weekStart = (string)($sub['week_start'] ?? '');
-    $instanceId = (int)($sub['bonus_instance_id'] ?? 0);
-    if ($weekStart !== '' && $instanceId > 0) {
-      $info = gb2_bonus_instance_with_def($weekStart, $instanceId);
-      if ($info) {
-        $rewardCents = (int)($info['reward_cents'] ?? 0);
-        $rewardPhone = (int)($info['reward_phone_min'] ?? 0);
-        $rewardGames = (int)($info['reward_games_min'] ?? 0);
+      $weekStart  = (string)($sub['week_start'] ?? '');
+      $instanceId = (int)($sub['bonus_instance_id'] ?? 0);
 
-        if ($rewardCents !== 0) {
-          gb2_ledger_add($kidId, 'bonus_reward', $rewardCents, 0, 0, (string)($info['title'] ?? 'Bonus'), 'bonus:' . $instanceId);
-        }
-        if ($rewardPhone !== 0 || $rewardGames !== 0) {
-          gb2_priv_apply_bonus($kidId, $rewardPhone, $rewardGames);
+      if ($weekStart !== '' && $instanceId > 0) {
+        $info = gb2_bonus_instance_info($pdo, $weekStart, $instanceId);
+        if ($info) {
+          $rewardCents = (int)($info['reward_cents'] ?? 0);
+          $rewardPhone = (int)($info['reward_phone_min'] ?? 0);
+          $rewardGames = (int)($info['reward_games_min'] ?? 0);
+
+          if ($rewardCents !== 0) {
+            gb2_ledger_add(
+              $kidId,
+              'bonus_reward',
+              $rewardCents,
+              0,
+              0,
+              (string)($info['title'] ?? 'Bonus'),
+              'bonus:' . $instanceId
+            );
+          }
+
+          if ($rewardPhone !== 0 || $rewardGames !== 0) {
+            gb2_priv_apply_bonus($kidId, $rewardPhone, $rewardGames);
+          }
+        } else {
+          // Not fatal: approve still works; just log missing def/instance linkage
+          gb2_approve_log('bonus_info_missing sub_id=' . $subId . ' week_start=' . $weekStart . ' instance_id=' . $instanceId);
         }
       }
+
+    } else {
+      // Rejected bonus: return to claimed so it can be resubmitted
+      $pdo->prepare("UPDATE bonus_instances
+                       SET status='claimed', submission_id=NULL
+                     WHERE submission_id=?")
+          ->execute([$subId]);
     }
+
+  } else {
+    throw new RuntimeException('Unknown kind=' . $kind . ' sub_id=' . $subId);
   }
 
-  gb2_audit('admin', 0, 'approve_submission', ['sub_id'=>$subId,'kid_id'=>$kidId,'kind'=>$sub['kind']]);
+  gb2_audit('admin', 0, 'review_submission', [
+    'sub_id'   => $subId,
+    'kid_id'   => $kidId,
+    'kind'     => $kind,
+    'decision' => $decision,
+    'has_note' => ($note !== ''),
+  ]);
+
   $pdo->commit();
-  header('Location: /admin/review.php?ok=' . urlencode('Approved.'));
+
+  header('Location: /admin/review.php?ok=' . urlencode($decision === 'approved' ? 'Approved.' : 'Rejected.'));
   exit;
+
 } catch (Throwable $e) {
-  $pdo->rollBack();
+  if ($pdo->inTransaction()) $pdo->rollBack();
+  gb2_approve_log('review_failed sub_id=' . $subId . ' decision=' . $decision . ' err=' . $e->getMessage());
   header('Location: /admin/review.php?err=' . urlencode('Approve failed.'));
   exit;
 }

@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+
 require_once __DIR__ . '/common.php';
 
 function gb2_db_path(): string {
@@ -8,20 +9,29 @@ function gb2_db_path(): string {
   return rtrim($dir,'/') . '/app.sqlite';
 }
 
-function gb2_pdo(): PDO {
-  static $pdo = null;
-  if ($pdo) return $pdo;
+/**
+ * Open SQLite connection WITHOUT running schema init/migrations.
+ * Use gb2_pdo() for normal operation.
+ */
+function gb2_pdo_raw(): PDO {
   $db = gb2_db_path();
   $pdo = new PDO('sqlite:' . $db, null, null, [
     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
   ]);
+
+  // Safe defaults
   $pdo->exec("PRAGMA foreign_keys=ON;");
+  $pdo->exec("PRAGMA busy_timeout=3000;");
+
   return $pdo;
 }
 
-function gb2_db_init(): void {
-  $pdo = gb2_pdo();
+/**
+ * Initialize base tables and apply migrations using the provided PDO.
+ * This MUST NOT call gb2_pdo() (to avoid recursion).
+ */
+function gb2_db_init_with(PDO $pdo): void {
   $pdo->exec("
 CREATE TABLE IF NOT EXISTS kids(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,4 +145,34 @@ CREATE TABLE IF NOT EXISTS audit(
   ua TEXT
 );
 ");
+
+  // Apply schema migrations (PRAGMA user_version based) on THIS PDO (no recursion)
+  require_once __DIR__ . '/migrations.php';
+  gb2_db_migrate($pdo);
+}
+
+/**
+ * Public initializer (kept for compatibility).
+ */
+function gb2_db_init(): void {
+  // Force initialization in a standard way
+  gb2_pdo();
+}
+
+function gb2_pdo(): PDO {
+  static $pdo = null;
+  static $inited = false;
+
+  if ($pdo && $inited) return $pdo;
+
+  if (!$pdo) {
+    $pdo = gb2_pdo_raw();
+  }
+
+  if (!$inited) {
+    gb2_db_init_with($pdo);
+    $inited = true;
+  }
+
+  return $pdo;
 }
