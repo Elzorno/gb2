@@ -62,6 +62,7 @@ function bonus_available_count_for_kid(int $kidId, array $rows): int {
 /**
  * Normalize privileges into:
  *   ['locks'=>['phone'=>0/1,'games'=>0/1,'other'=>0/1],
+ *    'until'=>['phone'=>iso|null,'games'=>iso|null,'other'=>iso|null],
  *    'banks'=>['phone'=>min,'games'=>min,'other'=>min]]
  *
  * Works whether gb2_priv_get_for_kid() returns:
@@ -72,12 +73,18 @@ function gb2_norm_priv(array $priv): array {
   if (isset($priv['locks']) && is_array($priv['locks'])) {
     $locks = $priv['locks'];
     $banks = (isset($priv['banks']) && is_array($priv['banks'])) ? $priv['banks'] : [];
+    $until = (isset($priv['until']) && is_array($priv['until'])) ? $priv['until'] : [];
 
     return [
       'locks' => [
         'phone' => (int)($locks['phone'] ?? $locks['phone_locked'] ?? 0),
         'games' => (int)($locks['games'] ?? $locks['games_locked'] ?? 0),
         'other' => (int)($locks['other'] ?? $locks['other_locked'] ?? 0),
+      ],
+      'until' => [
+        'phone' => (string)($until['phone'] ?? $priv['phone_locked_until'] ?? ''),
+        'games' => (string)($until['games'] ?? $priv['games_locked_until'] ?? ''),
+        'other' => (string)($until['other'] ?? $priv['other_locked_until'] ?? ''),
       ],
       'banks' => [
         'phone' => (int)($banks['phone'] ?? $banks['bank_phone_min'] ?? 0),
@@ -93,12 +100,23 @@ function gb2_norm_priv(array $priv): array {
       'games' => (int)($priv['games_locked'] ?? 0),
       'other' => (int)($priv['other_locked'] ?? 0),
     ],
+    'until' => [
+      'phone' => (string)($priv['phone_locked_until'] ?? ''),
+      'games' => (string)($priv['games_locked_until'] ?? ''),
+      'other' => (string)($priv['other_locked_until'] ?? ''),
+    ],
     'banks' => [
       'phone' => (int)($priv['bank_phone_min'] ?? 0),
       'games' => (int)($priv['bank_games_min'] ?? 0),
       'other' => (int)($priv['bank_other_min'] ?? 0),
     ],
   ];
+}
+
+function gb2_until_ts(string $iso): int {
+  if ($iso === '') return 0;
+  $t = strtotime($iso);
+  return $t ? (int)$t : 0;
 }
 
 gb2_page_start('Family', null);
@@ -130,7 +148,7 @@ gb2_page_start('Family', null);
 
   $assignments = $kidId ? gb2_assignments_for_kid_day($kidId, $todayYmd) : [];
   $privRaw     = $kidId ? gb2_priv_get_for_kid($kidId) : [];
-  $priv        = is_array($privRaw) ? gb2_norm_priv($privRaw) : ['locks'=>['phone'=>0,'games'=>0,'other'=>0], 'banks'=>['phone'=>0,'games'=>0,'other'=>0]];
+  $priv        = is_array($privRaw) ? gb2_norm_priv($privRaw) : ['locks'=>['phone'=>0,'games'=>0,'other'=>0], 'until'=>['phone'=>'','games'=>'','other'=>''], 'banks'=>['phone'=>0,'games'=>0,'other'=>0]];
 
   $bonusAvail  = $kidId ? bonus_available_count_for_kid($kidId, $weekBonusRows) : 0;
 
@@ -141,9 +159,18 @@ gb2_page_start('Family', null);
   }
 
   $locks = $priv['locks'];
+  $until = $priv['until'];
   $banks = $priv['banks'];
 
   $anyLock = ((int)$locks['phone'] === 1) || ((int)$locks['games'] === 1) || ((int)$locks['other'] === 1);
+
+  $phoneUntilIso = (string)($until['phone'] ?? '');
+  $gamesUntilIso = (string)($until['games'] ?? '');
+  $otherUntilIso = (string)($until['other'] ?? '');
+
+  $phoneUntilTs = gb2_until_ts($phoneUntilIso);
+  $gamesUntilTs = gb2_until_ts($gamesUntilIso);
+  $otherUntilTs = gb2_until_ts($otherUntilIso);
 ?>
 
   <div class="card">
@@ -189,9 +216,37 @@ gb2_page_start('Family', null);
     <div class="small">Locks</div>
     <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:8px">
       <?php if ($anyLock): ?>
-        <?php if ((int)$locks['phone'] === 1): ?><div class="badge">Phone: Locked</div><?php endif; ?>
-        <?php if ((int)$locks['games'] === 1): ?><div class="badge">Games: Locked</div><?php endif; ?>
-        <?php if ((int)$locks['other'] === 1): ?><div class="badge">Other: Locked</div><?php endif; ?>
+
+        <?php if ((int)$locks['phone'] === 1): ?>
+          <div class="badge badge-lock">
+            Phone: Locked
+            <?php if ($phoneUntilIso !== '' && $phoneUntilTs > 0): ?>
+              <span class="lock-until">until <?= gb2_h($phoneUntilIso) ?></span>
+              <span class="lock-countdown" data-gb2-until="<?= (int)$phoneUntilTs ?>"></span>
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
+
+        <?php if ((int)$locks['games'] === 1): ?>
+          <div class="badge badge-lock">
+            Games: Locked
+            <?php if ($gamesUntilIso !== '' && $gamesUntilTs > 0): ?>
+              <span class="lock-until">until <?= gb2_h($gamesUntilIso) ?></span>
+              <span class="lock-countdown" data-gb2-until="<?= (int)$gamesUntilTs ?>"></span>
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
+
+        <?php if ((int)$locks['other'] === 1): ?>
+          <div class="badge badge-lock">
+            Other: Locked
+            <?php if ($otherUntilIso !== '' && $otherUntilTs > 0): ?>
+              <span class="lock-until">until <?= gb2_h($otherUntilIso) ?></span>
+              <span class="lock-countdown" data-gb2-until="<?= (int)$otherUntilTs ?>"></span>
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
+
       <?php else: ?>
         <div class="badge">No active locks</div>
       <?php endif; ?>
@@ -216,5 +271,45 @@ gb2_page_start('Family', null);
   </div>
 
 <?php endforeach; ?>
+
+<script>
+(function(){
+  function pad2(n){ n = Math.floor(n); return (n < 10 ? "0" : "") + n; }
+  function fmt(secs){
+    secs = Math.max(0, Math.floor(secs));
+    var d = Math.floor(secs / 86400); secs -= d * 86400;
+    var h = Math.floor(secs / 3600);  secs -= h * 3600;
+    var m = Math.floor(secs / 60);    secs -= m * 60;
+    var s = secs;
+
+    var parts = [];
+    if (d > 0) parts.push(d + "d");
+    if (h > 0 || d > 0) parts.push(h + "h");
+    parts.push(pad2(m) + "m");
+    parts.push(pad2(s) + "s");
+    return "(" + parts.join(" ") + " remaining)";
+  }
+
+  function tick(){
+    var now = Math.floor(Date.now() / 1000);
+    document.querySelectorAll("[data-gb2-until]").forEach(function(el){
+      var until = parseInt(el.getAttribute("data-gb2-until") || "0", 10);
+      if (!until || until <= 0) return;
+
+      var left = until - now;
+      if (left <= 0) {
+        el.textContent = "(expired — refresh)";
+        el.classList.add("expired");
+      } else {
+        el.textContent = fmt(left);
+        el.classList.remove("expired");
+      }
+    });
+  }
+
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
 
 <?php gb2_nav('family'); gb2_page_end(); ?>

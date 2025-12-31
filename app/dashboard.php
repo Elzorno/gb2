@@ -25,6 +25,20 @@ if (function_exists('gb2_is_weekday') && gb2_is_weekday($dObj)) {
 
 $priv = gb2_priv_get_for_kid((int)$kid['kid_id']);
 
+function gb2_until_ts(string $iso): int {
+  if ($iso === '') return 0;
+  $t = strtotime($iso);
+  return $t ? (int)$t : 0;
+}
+
+$phoneUntilIso = (string)($priv['phone_locked_until'] ?? '');
+$gamesUntilIso = (string)($priv['games_locked_until'] ?? '');
+$otherUntilIso = (string)($priv['other_locked_until'] ?? '');
+
+$phoneUntilTs = gb2_until_ts($phoneUntilIso);
+$gamesUntilTs = gb2_until_ts($gamesUntilIso);
+$otherUntilTs = gb2_until_ts($otherUntilIso);
+
 gb2_page_start('Dashboard', $kid);
 ?>
 <div class="card">
@@ -60,9 +74,31 @@ gb2_page_start('Dashboard', $kid);
 
   <div style="margin-top:10px">
     <div class="row" style="gap:10px; flex-wrap:wrap">
-      <div class="badge">Phone: <?= ((int)$priv['phone_locked'] === 1) ? 'Locked' : 'Allowed' ?></div>
-      <div class="badge">Games: <?= ((int)$priv['games_locked'] === 1) ? 'Locked' : 'Allowed' ?></div>
-      <div class="badge">Other: <?= ((int)$priv['other_locked'] === 1) ? 'Locked' : 'Allowed' ?></div>
+
+      <div class="badge badge-lock">
+        Phone: <?= ((int)$priv['phone_locked'] === 1) ? 'Locked' : 'Allowed' ?>
+        <?php if ((int)$priv['phone_locked'] === 1 && $phoneUntilIso !== '' && $phoneUntilTs > 0): ?>
+          <span class="lock-until">until <?= gb2_h($phoneUntilIso) ?></span>
+          <span class="lock-countdown" data-gb2-until="<?= (int)$phoneUntilTs ?>"></span>
+        <?php endif; ?>
+      </div>
+
+      <div class="badge badge-lock">
+        Games: <?= ((int)$priv['games_locked'] === 1) ? 'Locked' : 'Allowed' ?>
+        <?php if ((int)$priv['games_locked'] === 1 && $gamesUntilIso !== '' && $gamesUntilTs > 0): ?>
+          <span class="lock-until">until <?= gb2_h($gamesUntilIso) ?></span>
+          <span class="lock-countdown" data-gb2-until="<?= (int)$gamesUntilTs ?>"></span>
+        <?php endif; ?>
+      </div>
+
+      <div class="badge badge-lock">
+        Other: <?= ((int)$priv['other_locked'] === 1) ? 'Locked' : 'Allowed' ?>
+        <?php if ((int)$priv['other_locked'] === 1 && $otherUntilIso !== '' && $otherUntilTs > 0): ?>
+          <span class="lock-until">until <?= gb2_h($otherUntilIso) ?></span>
+          <span class="lock-countdown" data-gb2-until="<?= (int)$otherUntilTs ?>"></span>
+        <?php endif; ?>
+      </div>
+
     </div>
 
     <div class="note" style="margin-top:10px">
@@ -74,5 +110,45 @@ gb2_page_start('Dashboard', $kid);
     </div>
   </div>
 </div>
+
+<script>
+(function(){
+  function pad2(n){ n = Math.floor(n); return (n < 10 ? "0" : "") + n; }
+  function fmt(secs){
+    secs = Math.max(0, Math.floor(secs));
+    var d = Math.floor(secs / 86400); secs -= d * 86400;
+    var h = Math.floor(secs / 3600);  secs -= h * 3600;
+    var m = Math.floor(secs / 60);    secs -= m * 60;
+    var s = secs;
+
+    var parts = [];
+    if (d > 0) parts.push(d + "d");
+    if (h > 0 || d > 0) parts.push(h + "h");
+    parts.push(pad2(m) + "m");
+    parts.push(pad2(s) + "s");
+    return "(" + parts.join(" ") + " remaining)";
+  }
+
+  function tick(){
+    var now = Math.floor(Date.now() / 1000);
+    document.querySelectorAll("[data-gb2-until]").forEach(function(el){
+      var until = parseInt(el.getAttribute("data-gb2-until") || "0", 10);
+      if (!until || until <= 0) return;
+
+      var left = until - now;
+      if (left <= 0) {
+        el.textContent = "(expired — refresh)";
+        el.classList.add("expired");
+      } else {
+        el.textContent = fmt(left);
+        el.classList.remove("expired");
+      }
+    });
+  }
+
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
 
 <?php gb2_nav('dashboard'); gb2_page_end(); ?>
