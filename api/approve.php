@@ -18,8 +18,33 @@ function gb2_approve_log(string $msg): void {
   @file_put_contents($dir . '/approve_fail.log', '[' . date('c') . '] ' . $msg . "\n", FILE_APPEND);
 }
 
+function gb2_try_delete_submission_photo(array $sub): void {
+  $photo = (string)($sub['photo_path'] ?? '');
+  if ($photo === '' || $photo === 'uploads/NO_PHOTO') return;
+
+  $dataDir = rtrim(gb2_data_dir(), '/');
+  $abs = $dataDir . '/' . ltrim($photo, '/');
+
+  // Safety: ensure path stays under dataDir
+  $realData = @realpath($dataDir);
+  $realAbs  = @realpath($abs);
+  if (!$realData || !$realAbs) {
+    // If file doesn't exist, nothing to do.
+    return;
+  }
+  if (strpos($realAbs, $realData . DIRECTORY_SEPARATOR) !== 0) {
+    gb2_approve_log('photo_delete_refused path=' . $abs);
+    return;
+  }
+
+  if (is_file($realAbs)) {
+    if (!@unlink($realAbs)) {
+      gb2_approve_log('photo_delete_failed path=' . $realAbs);
+    }
+  }
+}
+
 function gb2_bonus_instance_info(PDO $pdo, string $weekStart, int $instanceId): ?array {
-  // Join bonus_instances -> bonus_defs to get rewards + title in one query
   $st = $pdo->prepare("
     SELECT
       bi.id            AS instance_id,
@@ -41,6 +66,36 @@ function gb2_bonus_instance_info(PDO $pdo, string $weekStart, int $instanceId): 
   $st->execute([$weekStart, $instanceId]);
   $row = $st->fetch(PDO::FETCH_ASSOC);
   return $row ?: null;
+}
+
+function gb2_try_delete_photo(string $photoPath): void {
+  if ($photoPath === '' || $photoPath === 'uploads/NO_PHOTO') return;
+
+  $dataDir = rtrim(gb2_data_dir(), '/');
+  $rel = ltrim($photoPath, '/');
+
+  // Only allow deletes under uploads/
+  if (strpos($rel, 'uploads/') !== 0) {
+    gb2_approve_log('skip_delete_non_uploads photo_path=' . $photoPath);
+    return;
+  }
+
+  $abs = $dataDir . '/' . $rel;
+
+  // Realpath safety: ensure abs resolves under dataDir/uploads
+  $uploadsDir = realpath($dataDir . '/uploads');
+  $absReal = realpath($abs);
+  if ($uploadsDir === false || $absReal === false) return;
+  if (strpos($absReal, $uploadsDir) !== 0) {
+    gb2_approve_log('skip_delete_outside_uploads abs=' . $absReal);
+    return;
+  }
+
+  if (is_file($absReal)) {
+    if (!@unlink($absReal)) {
+      gb2_approve_log('delete_failed abs=' . $absReal);
+    }
+  }
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
@@ -70,6 +125,7 @@ if ($subId <= 0 || ($decision !== 'approved' && $decision !== 'rejected')) {
 }
 
 $pdo = gb2_pdo();
+$photoPathToDelete = '';
 
 try {
   $pdo->beginTransaction();
@@ -83,6 +139,8 @@ try {
   $kind   = (string)($sub['kind'] ?? '');
   $status = (string)($sub['status'] ?? '');
   $kidId  = (int)($sub['kid_id'] ?? 0);
+
+  $photoPathToDelete = (string)($sub['photo_path'] ?? '');
 
   if ($kidId <= 0) throw new RuntimeException('Invalid kid_id on submission id=' . $subId);
   if ($status !== 'pending') throw new RuntimeException('Not pending id=' . $subId . ' status=' . $status);
@@ -109,7 +167,6 @@ try {
 
   } elseif ($kind === 'bonus') {
     if ($decision === 'approved') {
-      // Approved bonus stays approved
       $pdo->prepare("UPDATE bonus_instances SET status='approved' WHERE submission_id=?")
           ->execute([$subId]);
 
@@ -139,13 +196,11 @@ try {
             gb2_priv_apply_bonus($kidId, $rewardPhone, $rewardGames);
           }
         } else {
-          // Not fatal: approve still works; just log missing def/instance linkage
           gb2_approve_log('bonus_info_missing sub_id=' . $subId . ' week_start=' . $weekStart . ' instance_id=' . $instanceId);
         }
       }
 
     } else {
-      // Rejected bonus: return to claimed so it can be resubmitted
       $pdo->prepare("UPDATE bonus_instances
                        SET status='claimed', submission_id=NULL
                      WHERE submission_id=?")
@@ -165,9 +220,9 @@ try {
   ]);
 
   $pdo->commit();
+  // Delete uploaded photo after final decision (approve or reject)
+  gb2_try_delete_submission_photo($sub);
 
-  header('Location: /admin/review.php?ok=' . urlencode($decision === 'approved' ? 'Approved.' : 'Rejected.'));
-  exit;
 
 } catch (Throwable $e) {
   if ($pdo->inTransaction()) $pdo->rollBack();
@@ -175,3 +230,13 @@ try {
   header('Location: /admin/review.php?err=' . urlencode('Approve failed.'));
   exit;
 }
+
+// After DB commit: delete the photo (best effort; never blocks the approval flow)
+try {
+  gb2_try_delete_photo($photoPathToDelete);
+} catch (Throwable $e) {
+  gb2_approve_log('delete_exception sub_id=' . $subId . ' err=' . $e->getMessage());
+}
+
+header('Location: /admin/review.php?ok=' . urlencode($decision === 'approved' ? 'Approved.' : 'Rejected.'));
+exit;

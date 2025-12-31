@@ -17,18 +17,29 @@ $noPhoto  = ((string)($_POST['no_photo'] ?? '')) === '1';
 
 $dataDir = gb2_data_dir();
 $photoRel = '';   // value stored in DB (relative under /data)
-$destAbs  = '';   // absolute file path if we actually save a file
+
+function gb2_pick_upload_field(): string {
+  // Accept multiple field names for iPhone reliability
+  foreach (['photo', 'photo_camera', 'photo_library'] as $k) {
+    if (!empty($_FILES[$k]) && (int)($_FILES[$k]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+      return $k;
+    }
+  }
+  return 'photo';
+}
 
 if ($noPhoto) {
   // Sentinel: no file exists, but schema requires a value.
   $photoRel = 'uploads/NO_PHOTO';
 } else {
-  if (empty($_FILES['photo']) || ($_FILES['photo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+  $field = gb2_pick_upload_field();
+
+  if (empty($_FILES[$field]) || ($_FILES[$field]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
     http_response_code(400); echo "Upload failed."; exit;
   }
-  if ((int)($_FILES['photo']['size'] ?? 0) > $maxBytes) { http_response_code(413); echo "File too large."; exit; }
+  if ((int)($_FILES[$field]['size'] ?? 0) > $maxBytes) { http_response_code(413); echo "File too large."; exit; }
 
-  $tmp = (string)($_FILES['photo']['tmp_name'] ?? '');
+  $tmp = (string)($_FILES[$field]['tmp_name'] ?? '');
   if ($tmp === '' || !is_file($tmp)) { http_response_code(400); echo "Upload failed."; exit; }
 
   $mime = '';

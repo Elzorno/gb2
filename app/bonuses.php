@@ -12,7 +12,7 @@ $kid = gb2_kid_require();
 $today    = (new DateTimeImmutable('today'))->format('Y-m-d');
 $weekStart = gb2_bonus_week_start($today);
 
-// Ensure weekly instances exist (same logic as your backup)
+// Ensure weekly instances exist
 $pdo = gb2_pdo();
 $st = $pdo->prepare("SELECT COUNT(*) as c FROM bonus_instances WHERE week_start=?");
 $st->execute([$weekStart]);
@@ -76,21 +76,37 @@ gb2_page_start('Bonuses', $kid);
         </form>
 
       <?php elseif ($status === 'claimed' && $claimedBy === $kidId): ?>
-        <!-- Submit proof with photo -->
+        <div class="note" style="margin-top:10px">
+          Tap <b>Take photo</b> to use the camera, or <b>Choose photo</b> to pick from your library.
+          After you choose, it will submit automatically.
+        </div>
+
         <form method="post" action="/api/submit_proof.php" enctype="multipart/form-data" style="margin-top:10px">
           <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
           <input type="hidden" name="kind" value="bonus">
           <input type="hidden" name="week_start" value="<?= gb2_h($weekStart) ?>">
           <input type="hidden" name="instance_id" value="<?= (int)$instId ?>">
 
-          <div class="small" style="margin-bottom:6px">Photo proof</div>
-          <input class="input" type="file" name="photo" accept="image/*" required>
-
-          <div style="height:10px"></div>
-          <button class="btn primary" type="submit">Submit proof</button>
+          <div class="grid two" style="align-items:center">
+            <div>
+              <label class="btn" style="display:inline-block; text-align:center; width:100%">
+                Take photo
+                <input class="input" type="file" name="photo_camera" accept="image/*" capture="environment"
+                       onchange="this.form.submit()"
+                       style="display:none">
+              </label>
+            </div>
+            <div>
+              <label class="btn" style="display:inline-block; text-align:center; width:100%">
+                Choose photo
+                <input class="input" type="file" name="photo_library" accept="image/*"
+                       onchange="this.form.submit()"
+                       style="display:none">
+              </label>
+            </div>
+          </div>
         </form>
 
-        <!-- Verify without photo (matches Today.php pattern) -->
         <form method="post" action="/api/submit_proof.php" style="margin-top:10px">
           <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
           <input type="hidden" name="kind" value="bonus">
@@ -99,7 +115,6 @@ gb2_page_start('Bonuses', $kid);
           <input type="hidden" name="no_photo" value="1">
           <button class="btn" type="submit">Verify without photo</button>
         </form>
-
       <?php endif; ?>
     </div>
   <?php endforeach; ?>

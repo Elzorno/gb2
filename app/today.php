@@ -34,6 +34,7 @@ gb2_page_start('Today', $kid);
     <div class="status pending" style="margin-top:12px">Weekend mode — no base rotation today.</div>
     <div class="note" style="margin-top:10px">Check Bonuses for optional tasks.</div>
   <?php else: ?>
+
     <?php foreach ($items as $it): ?>
       <?php
         $slotTitle = (string)($it['slot_title'] ?? 'Chore');
@@ -48,30 +49,48 @@ gb2_page_start('Today', $kid);
           </div>
         </div>
 
+        <div class="note" style="margin-top:10px">
+          Tap <b>Take photo</b> to use the camera, or <b>Choose photo</b> to pick from your library.
+          After you choose, it will submit automatically.
+        </div>
+
         <form method="post" action="/api/submit_proof.php" enctype="multipart/form-data" style="margin-top:10px">
           <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
           <input type="hidden" name="kind" value="base">
           <input type="hidden" name="day" value="<?= gb2_h($today) ?>">
           <input type="hidden" name="slot_id" value="<?= (int)$slotId ?>">
 
-          <div class="small" style="margin-bottom:6px">Photo proof</div>
-          <input class="input" type="file" name="photo" accept="image/*" required>
+          <div class="grid two" style="align-items:center">
+            <div>
+              <label class="btn" style="display:inline-block; text-align:center; width:100%">
+                Take photo
+                <input class="input" type="file" name="photo_camera" accept="image/*" capture="environment"
+                       onchange="this.form.submit()"
+                       style="display:none">
+              </label>
+            </div>
+            <div>
+              <label class="btn" style="display:inline-block; text-align:center; width:100%">
+                Choose photo
+                <input class="input" type="file" name="photo_library" accept="image/*"
+                       onchange="this.form.submit()"
+                       style="display:none">
+              </label>
+            </div>
+          </div>
+        </form>
 
-          <div style="height:10px"></div>
-          </form>
-
-          <form method="post" action="/api/submit_proof.php" style="margin-top:10px">
-            <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
-            <input type="hidden" name="kind" value="base">
-            <input type="hidden" name="day" value="<?= gb2_h($today) ?>">
-            <input type="hidden" name="slot_id" value="<?= (int)$slotId ?>">
-            <input type="hidden" name="no_photo" value="1">
-            <button class="btn" type="submit">Verify without photo</button>
-          </form>
-          <button class="btn primary" type="submit">Submit proof</button>
+        <form method="post" action="/api/submit_proof.php" style="margin-top:10px">
+          <input type="hidden" name="_csrf" value="<?= gb2_h(gb2_csrf_token()) ?>">
+          <input type="hidden" name="kind" value="base">
+          <input type="hidden" name="day" value="<?= gb2_h($today) ?>">
+          <input type="hidden" name="slot_id" value="<?= (int)$slotId ?>">
+          <input type="hidden" name="no_photo" value="1">
+          <button class="btn" type="submit">Verify without photo</button>
         </form>
       </div>
     <?php endforeach; ?>
+
   <?php endif; ?>
 </div>
 
