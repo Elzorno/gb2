@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../lib/ui.php';
 require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/../lib/auth.php';
+require_once __DIR__ . '/../lib/csrf.php';
 
 gb2_db_init();
 
@@ -14,6 +15,11 @@ if ($kid) {
   exit;
 }
 
+$cfg = gb2_config();
+$pinMin = (int)($cfg['session']['pin_min_len'] ?? 6);
+$pinMax = (int)($cfg['session']['pin_max_len'] ?? 6);
+$pinDesc = ($pinMin === $pinMax) ? "{$pinMin}-digit" : "{$pinMin}–{$pinMax} digits";
+
 $err = '';
 $mode = 'login'; // 'login' or 'setpin'
 $kidId = trim((string)($_POST['kid_id'] ?? ($_GET['kid_id'] ?? '')));
@@ -22,7 +28,8 @@ $kidRow = null;
 
 try {
   $pdo = gb2_pdo();
-  $kids = $pdo->query("SELECT id, name FROM kids ORDER BY sort_order ASC, name COLLATE NOCASE ASC")->fetchAll(PDO::FETCH_ASSOC);
+  $kids = $pdo->query("SELECT id, name FROM kids ORDER BY sort_order ASC, name COLLATE NOCASE ASC")
+              ->fetchAll(PDO::FETCH_ASSOC);
 
   if ($kidId !== '' && ctype_digit($kidId)) {
     $st = $pdo->prepare("SELECT id, name, pin_hash FROM kids WHERE id=?");
@@ -72,8 +79,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
           $err = 'Please enter and confirm your new PIN.';
         } elseif (!ctype_digit($new1) || !ctype_digit($new2)) {
           $err = 'PIN must be numbers only.';
-        } elseif (strlen($new1) < 4 || strlen($new1) > 10) {
-          $err = 'PIN must be 4–10 digits.';
+        } elseif (!gb2_pin_policy_ok($new1)) {
+          $err = "PIN must be {$pinDesc}.";
         } elseif ($new1 !== $new2) {
           $err = 'Those didn’t match. Please try again.';
         } else {
@@ -88,7 +95,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
               header('Location: /app/dashboard.php');
               exit;
             }
-            $err = 'PIN saved, but login failed. Please try again.';
+
+            // If we ever hit this, something else is wrong (cookie write, DB, etc.)
+            $err = 'PIN saved, but login failed. Please tell a parent/guardian.';
           } catch (Throwable $e) {
             $err = 'Could not save your PIN. Please tell a parent/guardian.';
           }
@@ -100,6 +109,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
         if ($pin === '') {
           $err = 'Please enter your PIN.';
+        } elseif (!ctype_digit($pin)) {
+          $err = 'PIN must be numbers only.';
+        } elseif (!gb2_pin_policy_ok($pin)) {
+          $err = "PIN must be {$pinDesc}.";
         } else {
           if (gb2_kid_login((int)$kidRow['id'], $pin)) {
             header('Location: /app/dashboard.php');
@@ -146,13 +159,13 @@ gb2_page_start('Kid Login', null);
     <div style="height:10px"></div>
 
     <?php if ($mode === 'setpin' && $kidId !== ''): ?>
-      <label class="small">New PIN (4–10 digits)</label>
-      <input class="input" name="new_pin" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••" required>
+      <label class="small">New PIN (<?= gb2_h($pinDesc) ?>)</label>
+      <input class="input" name="new_pin" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••••" required>
 
       <div style="height:10px"></div>
 
       <label class="small">Confirm new PIN</label>
-      <input class="input" name="confirm_pin" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••" required>
+      <input class="input" name="confirm_pin" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••••" required>
 
       <div style="height:12px"></div>
       <button class="btn primary" type="submit">Save PIN &amp; Log in</button>
@@ -161,8 +174,8 @@ gb2_page_start('Kid Login', null);
         If you forgot your PIN, ask a parent/guardian to reset it from Family Dashboard.
       </div>
     <?php else: ?>
-      <label class="small">PIN</label>
-      <input class="input" name="pin" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••" required>
+      <label class="small">PIN (<?= gb2_h($pinDesc) ?>)</label>
+      <input class="input" name="pin" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="••••••" required>
 
       <div style="height:12px"></div>
       <button class="btn primary" type="submit">Log in</button>
