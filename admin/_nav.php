@@ -1,16 +1,24 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/../lib/auth.php';
-$me = gb2_admin_current();
-?>
-<div class="topbar">
-  <div class="brand"><a href="/admin/dashboard.php">GB2 Admin</a></div>
-  <div class="nav">
-    <a href="/admin/dashboard.php">Dashboard</a>
-    <a href="/admin/setup.php">Setup</a>
-    <a href="/admin/review.php">Review</a>
-    <a href="/admin/grounding.php">Grounding</a>
-    <a href="/app/today.php">Kid View</a>
-    <a href="/admin/logout.php">Logout</a>
-  </div>
-</div>
+
+/**
+ * DEPRECATED: /admin/_nav.php
+ *
+ * GB2 no longer uses this file for navigation. The authoritative nav is rendered by:
+ *   - gb2_page_start() + gb2_nav() in /var/www/lib/ui.php
+ *
+ * This file remains ONLY as a compatibility shim in case any older/admin pages still include it.
+ * It forwards to gb2_nav() with a best-effort $active key.
+ */
+
+require_once __DIR__ . '/../lib/ui.php';   // provides gb2_nav()
+require_once __DIR__ . '/../lib/auth.php'; // ensures session/auth helpers available
+
+// If a caller set $active (string), use it; otherwise default to admin dashboard.
+$activeKey = 'admindash';
+if (isset($active) && is_string($active) && $active !== '') {
+  $activeKey = $active;
+}
+
+// Render the unified nav (matches current UI).
+gb2_nav($activeKey);

@@ -25,8 +25,8 @@ function gb2_flash_render(): void {
  * Bottom navigation: kid + admin share one consistent UI.
  *
  * Keys used by pages:
- * - Kid: dashboard, today, bonuses, history, logout
- * - Admin: admindash, family, grounding, review, setup, kidview, lock
+ * - Kid: dashboard, today, bonuses, rules, history, logout
+ * - Admin: admindash, family, grounding, infractions, infraction_defs, rules, review, setup, kidview, lock
  * - Logged out: login
  */
 function gb2_nav(string $active): void {
@@ -40,6 +40,9 @@ function gb2_nav(string $active): void {
       ['key'=>'admindash','href'=>'/admin/dashboard.php','label'=>'Dashboard'],
       ['key'=>'family','href'=>'/admin/family.php','label'=>'Family'],
       ['key'=>'grounding','href'=>'/admin/grounding.php','label'=>'Privileges'],
+      ['key'=>'infractions','href'=>'/admin/infractions.php','label'=>'Infractions'],
+      ['key'=>'infraction_defs','href'=>'/admin/infraction_defs.php','label'=>'Defs'],
+      ['key'=>'rules','href'=>'/app/rules.php','label'=>'Rules'],
       ['key'=>'review','href'=>'/admin/review.php','label'=>'Review'],
       ['key'=>'setup','href'=>'/admin/setup.php','label'=>'Setup'],
       ['key'=>'kidview','href'=>'/app/today.php','label'=>'Kid View'],
@@ -50,6 +53,7 @@ function gb2_nav(string $active): void {
       ['key'=>'dashboard','href'=>'/app/dashboard.php','label'=>'Dashboard'],
       ['key'=>'today','href'=>'/app/today.php','label'=>'Today'],
       ['key'=>'bonuses','href'=>'/app/bonuses.php','label'=>'Bonuses'],
+      ['key'=>'rules','href'=>'/app/rules.php','label'=>'Rules'],
       ['key'=>'history','href'=>'/app/history.php','label'=>'History'],
       ['key'=>'logout','href'=>'/app/logout.php','label'=>'Log out'],
     ];

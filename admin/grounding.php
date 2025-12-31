@@ -6,27 +6,12 @@ require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/kids.php';
 require_once __DIR__ . '/../lib/csrf.php';
 require_once __DIR__ . '/../lib/db.php';
+require_once __DIR__ . '/../lib/privileges.php';
 
 gb2_db_init();
 gb2_admin_require();
 
-$pdo  = gb2_pdo();
 $kids = gb2_kids_all();
-
-function pv_row(PDO $pdo, int $kidId): array {
-  $st = $pdo->prepare("SELECT * FROM privileges WHERE kid_id=?");
-  $st->execute([$kidId]);
-  $r = $st->fetch(PDO::FETCH_ASSOC);
-  return $r ?: [
-    'kid_id' => $kidId,
-    'phone_locked' => 0,
-    'games_locked' => 0,
-    'other_locked' => 0,
-    'bank_phone_min' => 0,
-    'bank_games_min' => 0,
-    'bank_other_min' => 0,
-  ];
-}
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
   gb2_csrf_verify();
@@ -41,17 +26,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $bank_games = max(0, (int)($_POST['bank_games_min'] ?? 0));
     $bank_other = max(0, (int)($_POST['bank_other_min'] ?? 0));
 
-    $pdo->prepare(
-      "INSERT INTO privileges(kid_id,phone_locked,games_locked,other_locked,bank_phone_min,bank_games_min,bank_other_min)
-       VALUES(?,?,?,?,?,?,?)
-       ON CONFLICT(kid_id) DO UPDATE SET
-         phone_locked=excluded.phone_locked,
-         games_locked=excluded.games_locked,
-         other_locked=excluded.other_locked,
-         bank_phone_min=excluded.bank_phone_min,
-         bank_games_min=excluded.bank_games_min,
-         bank_other_min=excluded.bank_other_min"
-    )->execute([$kidId, $phone, $games, $other, $bank_phone, $bank_games, $bank_other]);
+    // Use helpers so unlock clears *_locked_until deterministically.
+    gb2_priv_set_locks($kidId, $phone, $games, $other);
+    gb2_priv_set_banks($kidId, $bank_phone, $bank_games, $bank_other);
   }
 
   header("Location: /admin/grounding.php?saved=1");
@@ -75,7 +52,7 @@ $tok = gb2_csrf_token();
   <?php endif; ?>
 </div>
 
-<?php foreach ($kids as $k): $pv = pv_row($pdo, (int)$k['id']); ?>
+<?php foreach ($kids as $k): $pv = gb2_priv_get_for_kid((int)$k['id']); ?>
   <form class="card" method="post" action="/admin/grounding.php">
     <input type="hidden" name="_csrf" value="<?= gb2_h($tok) ?>">
     <input type="hidden" name="kid_id" value="<?= (int)$k['id'] ?>">
