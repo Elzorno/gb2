@@ -1,6 +1,6 @@
-# GB2 — Behavior + Chores (Fresh Rebuild)
+# GB2 — Grounding Board 2 (Behavior + Chores)
 
-This is a clean, mobile-first PHP + SQLite web app for:
+GB2 is a clean, mobile-first PHP + SQLite web app for:
 - Mon–Fri **daily** chore rotation (5 kids / 5 chore slots)
 - Weekend “project/bonus mode” (no base rotation)
 - Weekly, first-come **bonus chore** claims with photo proof
@@ -8,48 +8,36 @@ This is a clean, mobile-first PHP + SQLite web app for:
 - Admin review queue (approve/reject), audit log
 
 ## Requirements
-- Debian Bookworm (or similar)
-- Apache + PHP 8.2
+- Linux host with **Apache + PHP 8.2**
 - PHP extensions: sqlite3, pdo_sqlite, gd, mbstring, openssl, fileinfo
-- Writable data directory
+- Writable directories:
+  - `data/` (SQLite + runtime files)
+  - `data/uploads/` (proof photos)
 
-## Quick install (Debian/Bookworm)
-Run as root:
+## Installation (drop-in for existing deployments)
+1. Copy this repo into your web root (example):
+   - `/var/www`
 
-```bash
-apt-get update
-apt-get -y install apache2 php php-sqlite3 php-gd php-mbstring
-a2enmod headers rewrite
-systemctl restart apache2
-```
+2. Ensure your runtime config exists **outside the repo**:
+   - Create `/var/www/data/config.php` by copying `config.sample.php` and editing values.
+   - The tracked `/var/www/config.php` is a *shim* that loads `/var/www/data/config.php`.
 
-## Deploy
-Copy this folder into your Apache docroot (example: /var/www/gb2).
+3. Ensure the runtime directories exist and are writable by your web server user (`www-data` on Debian/Ubuntu):
+   - `/var/www/data`
+   - `/var/www/data/uploads`
 
-Make sure these are writable by the web server user (www-data):
-- `data/` (and `data/uploads/`)
+4. Point Apache at the repo (or put it under a vhost) and browse to:
+   - Parent/Guardian setup: `/admin/setup.php`
 
-Example:
-```bash
-chown -R www-data:www-data data
-find data -type d -exec chmod 775 {} \;
-find data -type f -exec chmod 664 {} \;
-```
+## Cron jobs
+Run weekday rotation and weekly bonus reset:
 
-## First run
-1. Open `/admin/setup.php`
-2. Set admin password + create kids + set kid PINs (6 digits recommended)
-3. Configure (or accept) the default rotation rule
-
-## Rotation schedule
-- Rotation is generated **Mon–Fri @ 00:05** (cron)
-- Bonus week resets **Mon @ 00:10** (cron)
-
-Install cron jobs (as root):
 ```bash
 crontab -e
 ```
+
 Add:
+
 ```cron
 5 0 * * 1-5 /usr/bin/php /var/www/cron/rotate_weekday.php
 10 0 * * 1 /usr/bin/php /var/www/cron/reset_bonus_week.php
@@ -57,7 +45,13 @@ Add:
 
 ## Security notes
 - Kids authenticate with PIN; a device session token is stored in a cookie.
-- All write actions require CSRF.
-- Admin actions require admin unlock (password).
-- Every important action writes to the audit log.
+- All state-changing actions use CSRF protection.
+- Admin actions require an admin unlock (password).
+- Security headers include a conservative Content-Security-Policy (no inline scripts).
+- Session cookies automatically set the `Secure` flag when HTTPS is detected (override via config: `session.cookie_secure`).
+- Important actions write to the audit log.
+
+## Repo hygiene
+- Runtime files under `data/` are intentionally not committed.
+- Local editor backups (e.g. `*.bak.*`) and support bundles should not be committed.
 
