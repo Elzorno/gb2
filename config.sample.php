@@ -1,5 +1,5 @@
 <?php
-// Copy to config.php and edit.
+// Copy to /data/config.php (outside the repo) and edit. config.php in the repo is a shim that loads it.
 
 return [
   // Store absolute path to data dir; default uses this project's /data

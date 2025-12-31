@@ -111,44 +111,4 @@ gb2_page_start('Dashboard', $kid);
   </div>
 </div>
 
-<script>
-(function(){
-  function pad2(n){ n = Math.floor(n); return (n < 10 ? "0" : "") + n; }
-  function fmt(secs){
-    secs = Math.max(0, Math.floor(secs));
-    var d = Math.floor(secs / 86400); secs -= d * 86400;
-    var h = Math.floor(secs / 3600);  secs -= h * 3600;
-    var m = Math.floor(secs / 60);    secs -= m * 60;
-    var s = secs;
-
-    var parts = [];
-    if (d > 0) parts.push(d + "d");
-    if (h > 0 || d > 0) parts.push(h + "h");
-    parts.push(pad2(m) + "m");
-    parts.push(pad2(s) + "s");
-    return "(" + parts.join(" ") + " remaining)";
-  }
-
-  function tick(){
-    var now = Math.floor(Date.now() / 1000);
-    document.querySelectorAll("[data-gb2-until]").forEach(function(el){
-      var until = parseInt(el.getAttribute("data-gb2-until") || "0", 10);
-      if (!until || until <= 0) return;
-
-      var left = until - now;
-      if (left <= 0) {
-        el.textContent = "(expired — refresh)";
-        el.classList.add("expired");
-      } else {
-        el.textContent = fmt(left);
-        el.classList.remove("expired");
-      }
-    });
-  }
-
-  tick();
-  setInterval(tick, 1000);
-})();
-</script>
-
 <?php gb2_nav('dashboard'); gb2_page_end(); ?>
