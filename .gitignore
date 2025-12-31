@@ -18,3 +18,6 @@ data/proofs/
 # Optional OS cruft
 .DS_Store
 Thumbs.db
+
+# runtime logs
+/data/*.log
