@@ -40,7 +40,33 @@ function gb2_kid_current(): ?array {
   return ['kid_id'=>(int)$row['kid_id'], 'name'=>(string)$row['name'], 'dev_id'=>(int)$row['dev_id']];
 }
 
+/**
+ * Admin impersonation helper:
+ * If admin is logged in and a kid_id is provided, return that kid (without setting any kid cookies).
+ * Used to allow admin to view kid pages without logging kids out.
+ */
+function gb2_admin_impersonate_kid_from_request(): ?array {
+  if (!gb2_admin_current()) return null;
+
+  $kidId = 0;
+  if (isset($_GET['kid_id'])) $kidId = (int)$_GET['kid_id'];
+  if ($kidId <= 0) return null;
+
+  $pdo = gb2_pdo();
+  $st = $pdo->prepare("SELECT id, name FROM kids WHERE id=? LIMIT 1");
+  $st->execute([$kidId]);
+  $k = $st->fetch(PDO::FETCH_ASSOC);
+  if (!$k) return null;
+
+  return ['kid_id'=>(int)$k['id'], 'name'=>(string)$k['name'], 'impersonating'=>true];
+}
+
 function gb2_kid_require(): array {
+  // 1) If admin wants to view as a kid, allow it.
+  $imp = gb2_admin_impersonate_kid_from_request();
+  if ($imp) return $imp;
+
+  // 2) Otherwise require real kid session.
   $kid = gb2_kid_current();
   if (!$kid) { header('Location: /app/login.php'); exit; }
   return $kid;

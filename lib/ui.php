@@ -46,7 +46,7 @@ function gb2_nav(string $active): void {
       ['key'=>'rules','href'=>'/app/rules.php','label'=>'Rules'],
       ['key'=>'review','href'=>'/admin/review.php','label'=>'Review'],
       ['key'=>'setup','href'=>'/admin/setup.php','label'=>'Setup'],
-      ['key'=>'kidview','href'=>'/app/today.php','label'=>'Kid View'],
+      ['key'=>'kidview','href'=>'/admin/kidview.php','label'=>'Kid View'],
       ['key'=>'lock','href'=>'/admin/logout.php','label'=>'Lock'],
     ];
   } elseif ($kid) {
@@ -83,11 +83,20 @@ function gb2_page_start(string $title, ?array $kid = null): void {
   $brandHref = $admin ? '/admin/dashboard.php' : '/app/dashboard.php';
 
   $who = '';
+  $isImpersonating = false;
   if ($admin) {
     $who = 'Parent/Guardian';
+    // If this is an admin impersonating a kid, show it in the badge.
+    if ($kid && (int)($kid['kid_id'] ?? 0) > 0 && !empty($kid['impersonating'])) {
+      $isImpersonating = true;
+      $who = 'Parent/Guardian • Viewing: ' . (string)($kid['name'] ?? ('Kid #' . (int)$kid['kid_id']));
+    }
   } elseif ($kid && isset($kid['name'])) {
     $who = 'Kid: ' . (string)$kid['name'];
   }
+
+  $req = (string)($_SERVER['REQUEST_URI'] ?? '');
+  $nextEnc = rawurlencode($req);
 
   echo '<!doctype html><html><head><meta charset="utf-8">';
   echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
@@ -98,7 +107,21 @@ function gb2_page_start(string $title, ?array $kid = null): void {
   echo '<div class="topbar">';
   echo '<div class="brand"><a href="'.gb2_h($brandHref).'">GB2</a></div>';
   echo '<div class="brand" style="margin-left:10px">'.gb2_h($title).'</div>';
-  if ($who) echo '<div class="badge">'.gb2_h($who).'</div>';
+
+  // Kid pages: always show a Parent/Guardian login link so you don't have to log kid out.
+  if (!$admin) {
+    echo '<div class="row" style="gap:10px; margin-left:auto; align-items:center">';
+    echo '<a class="btn" style="height:36px; padding:0 12px; border-radius:12px" href="/admin/login.php?next='.$nextEnc.'">Parent/Guardian</a>';
+    if ($who) echo '<div class="badge">'.gb2_h($who).'</div>';
+    echo '</div>';
+  } else {
+    if ($who) echo '<div class="badge">'.gb2_h($who).'</div>';
+    // When impersonating, add a quick exit link back to Kid View hub.
+    if ($isImpersonating) {
+      echo '<a class="btn" style="height:36px; padding:0 12px; border-radius:12px; margin-left:10px" href="/admin/kidview.php">Switch kid</a>';
+    }
+  }
+
   echo '</div>';
 }
 
