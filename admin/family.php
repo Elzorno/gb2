@@ -7,6 +7,7 @@ require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/../lib/kids.php';
 require_once __DIR__ . '/../lib/rotation.php';
+require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/bonuses.php';
 require_once __DIR__ . '/../lib/privileges.php';
 require_once __DIR__ . '/../lib/csrf.php';
@@ -144,6 +145,8 @@ gb2_page_start('Family', null);
 <?php foreach ($kids as $kidRow): ?>
 <?php
   $kidId   = (int)($kidRow['id'] ?? 0);
+  $earnedWeek = $kidId ? gb2_ledger_sum_cents_for_kid($kidId, 'bonus_reward', $weekStartYmd) : 0;
+  $earnedAll  = $kidId ? gb2_ledger_sum_cents_for_kid($kidId, 'bonus_reward', null) : 0;
   $kidName = (string)($kidRow['name'] ?? ('Kid #' . $kidId));
 
   $assignments = $kidId ? gb2_assignments_for_kid_day($kidId, $todayYmd) : [];
@@ -254,11 +257,10 @@ gb2_page_start('Family', null);
 
     <div style="height:12px"></div>
 
-    <div class="small">Banked minutes</div>
+    <div class="small">Bonus earnings</div>
     <div class="row" style="gap:10px; flex-wrap:wrap; margin-top:8px">
-      <div class="badge">Phone: <?= (int)$banks['phone'] ?> min</div>
-      <div class="badge">Games: <?= (int)$banks['games'] ?> min</div>
-      <div class="badge">Other: <?= (int)$banks['other'] ?> min</div>
+      <div class="badge">This week: <?= gb2_h(gb2_money((int)$earnedWeek)) ?></div>
+      <div class="badge">Total: <?= gb2_h(gb2_money((int)$earnedAll)) ?></div>
     </div>
 
     <div style="height:12px"></div>

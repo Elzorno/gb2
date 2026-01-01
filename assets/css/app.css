@@ -138,3 +138,21 @@ hr{ border:none; border-top:1px solid var(--border); margin:12px 0; }
   background:rgba(255,255,255,.06);
 }
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;}
+
+
+/* --- Chore chart grid --- */
+.table-wrap { overflow-x: auto; }
+.grid-table { width: 100%; border-collapse: collapse; }
+.grid-table th, .grid-table td {
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 10px;
+  vertical-align: top;
+}
+.grid-table th { text-align: left; font-weight: 600; }
+.grid-table .today-col { background: rgba(255,255,255,0.06); }
+.grid-table td.kid { white-space: nowrap; font-weight: 600; }
+.grid-table .cell-title { font-weight: 600; }
+.grid-table .cell-empty { opacity: 0.6; }
+.grid-table .cell-status { margin-top: 4px; font-size: 12px; opacity: 0.9; }
+.grid-table .cell-status.open { opacity: 0.7; }
+.grid-table .cell-status.done { opacity: 1.0; }

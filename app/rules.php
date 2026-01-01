@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../lib/ui.php';
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/db.php';
+require_once __DIR__ . '/../lib/rotation.php';
 
 gb2_db_init();
 
@@ -76,6 +77,75 @@ function gb2_rules_review_text(array $def, int $daysAppliedExample): string {
   return "{$half} day(s) after resolution (default = about half, rounded up)";
 }
 
+
+// --- Chore chart (read-only) ---
+$pdo = gb2_pdo();
+$today = new DateTimeImmutable('today');
+$todayYmd = $today->format('Y-m-d');
+$weekStart = gb2_week_start_monday($today);
+
+$dayCols = [];
+$dayKeys = [];
+$labels = ['Mon','Tue','Wed','Thu','Fri'];
+for ($i=0; $i<5; $i++) {
+  $d = $weekStart->modify('+' . $i . ' days');
+  $ymd = $d->format('Y-m-d');
+  $dayKeys[] = $ymd;
+  $dayCols[] = $labels[$i] . " " . $d->format('m/d');
+}
+
+$weekendSat = $weekStart->modify('+5 days')->format('Y-m-d');
+$weekendSun = $weekStart->modify('+6 days')->format('Y-m-d');
+
+$kids = $pdo->query("SELECT id,name FROM kids ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+$map = []; // [kid_id][day] = ['title'=>..., 'status'=>...]
+if ($dayKeys) {
+  $place = implode(',', array_fill(0, count($dayKeys), '?'));
+  $st = $pdo->prepare(
+    "SELECT a.day, a.kid_id, a.status, s.title AS slot_title
+     FROM assignments a
+     JOIN chore_slots s ON s.id=a.slot_id
+     WHERE a.day IN ($place)
+     ORDER BY a.day ASC"
+  );
+  $st->execute($dayKeys);
+  foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+    $kidId = (int)($r['kid_id'] ?? 0);
+    $day = (string)($r['day'] ?? '');
+    if ($kidId && $day !== '') {
+      $map[$kidId][$day] = [
+        'title' => (string)($r['slot_title'] ?? ''),
+        'status' => (string)($r['status'] ?? 'open'),
+      ];
+    }
+  }
+}
+
+// weekend (optional future use)
+$wkMap = []; // [kid_id] => array of lines
+$stWk = $pdo->prepare(
+  "SELECT a.day, a.kid_id, a.status, s.title AS slot_title
+   FROM assignments a
+   JOIN chore_slots s ON s.id=a.slot_id
+   WHERE a.day IN (?,?)
+   ORDER BY a.day ASC"
+);
+$stWk->execute([$weekendSat, $weekendSun]);
+foreach ($stWk->fetchAll(PDO::FETCH_ASSOC) as $r) {
+  $kidId = (int)($r['kid_id'] ?? 0);
+  $day = (string)($r['day'] ?? '');
+  $label = ($day === $weekendSat) ? 'Sat' : (($day === $weekendSun) ? 'Sun' : 'Wknd');
+  $title = (string)($r['slot_title'] ?? '');
+  $status = (string)($r['status'] ?? 'open');
+  if ($kidId && $title !== '') {
+    $wkMap[$kidId][] = $label . ': ' . $title . ' (' . $status . ')';
+  }
+}
+
+$todayCol = (int)$today->format('N'); // 1=Mon..7=Sun
+$highlightWeekend = ($todayCol >= 6);
+
 // Page title depends on role (kid or admin)
 $title = 'Rules';
 gb2_page_start($title, $kid ?: null);
@@ -108,6 +178,68 @@ gb2_page_start($title, $kid ?: null);
       <li>Unlock/shorten updates the lock timers deterministically and records the review.</li>
     </ul>
   </div>
+</div>
+
+
+<div class="card">
+  <div class="h1">Chore Chart</div>
+  <div class="h2">This week at a glance</div>
+
+  <div class="note" style="margin-top:10px">
+    This is a read-only view of the weekly rotation. The highlighted column is <b>today</b>.
+  </div>
+
+  <?php if (!$kids): ?>
+    <div class="note" style="margin-top:10px">No kids configured yet.</div>
+  <?php else: ?>
+    <div class="table-wrap" style="margin-top:12px">
+      <table class="grid-table chore-grid">
+        <thead>
+          <tr>
+            <th>Kid</th>
+            <?php foreach ($dayCols as $idx => $label): ?>
+              <?php $isToday = (!$highlightWeekend && $todayCol === ($idx + 1)); ?>
+              <th class="<?= $isToday ? 'today-col' : '' ?>"><?= gb2_h($label) ?></th>
+            <?php endforeach; ?>
+            <th class="<?= $highlightWeekend ? 'today-col' : '' ?>">Weekend</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($kids as $krow): ?>
+            <?php
+              $kidId = (int)($krow['id'] ?? 0);
+              $kidName = (string)($krow['name'] ?? '');
+            ?>
+            <tr>
+              <td class="kid"><?= gb2_h($kidName) ?></td>
+              <?php foreach ($dayKeys as $d): ?>
+                <?php
+                  $cell = $map[$kidId][$d] ?? null;
+                  $title = $cell ? (string)($cell['title'] ?? '') : '';
+                  $status = $cell ? (string)($cell['status'] ?? 'open') : '';
+                ?>
+                <td>
+                  <?php if ($title !== ''): ?>
+                    <div class="cell-title"><?= gb2_h($title) ?></div>
+                    <div class="cell-status <?= gb2_h($status) ?>"><?= gb2_h($status) ?></div>
+                  <?php else: ?>
+                    <div class="cell-empty">—</div>
+                  <?php endif; ?>
+                </td>
+              <?php endforeach; ?>
+              <td>
+                <?php if (!empty($wkMap[$kidId])): ?>
+                  <div class="cell-title"><?= gb2_h(implode(' · ', $wkMap[$kidId])) ?></div>
+                <?php else: ?>
+                  <div class="cell-empty">—</div>
+                <?php endif; ?>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
 </div>
 
 <div class="card">

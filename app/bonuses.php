@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../lib/ui.php';
 require_once __DIR__ . '/../lib/bonuses.php';
+require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/../lib/auth.php';
 
@@ -31,6 +32,33 @@ gb2_page_start('Bonuses', $kid);
 
   <?php gb2_flash_render(); ?>
 
+  <?php
+    $kidId = (int)($kid['kid_id'] ?? 0);
+    $earnedWeek = gb2_ledger_sum_cents_for_kid($kidId, 'bonus_reward', $weekStart);
+    $earnedAll  = gb2_ledger_sum_cents_for_kid($kidId, 'bonus_reward', null);
+    $recentEarn = gb2_ledger_list_for_kid($kidId, 10, 'bonus_reward');
+  ?>
+  <div class="card" style="margin-top:12px">
+    <div class="h2">Your earnings</div>
+    <div class="kv">This week: <b><?= gb2_h(gb2_money($earnedWeek)) ?></b> · Total: <b><?= gb2_h(gb2_money($earnedAll)) ?></b></div>
+    <?php if ($recentEarn): ?>
+      <div class="note" style="margin-top:8px">Recent approvals</div>
+      <div class="list" style="margin-top:8px">
+        <?php foreach ($recentEarn as $e): ?>
+          <div class="row" style="justify-content:space-between">
+            <div>
+              <div class="k"><?= gb2_h((string)($e['note'] ?? 'Bonus')) ?></div>
+              <div class="v"><?= gb2_h(substr((string)$e['ts'], 0, 10)) ?></div>
+            </div>
+            <div class="badge"><?= gb2_h(gb2_money((int)$e['amount_cents'])) ?></div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php else: ?>
+      <div class="note" style="margin-top:8px">No bonus earnings yet. Claim a bonus, do the work, and submit proof.</div>
+    <?php endif; ?>
+  </div>
+
   <?php foreach ($list as $b): ?>
     <?php
       $title   = (string)($b['title'] ?? 'Bonus');
@@ -38,8 +66,6 @@ gb2_page_start('Bonuses', $kid);
       $instId  = (int)($b['instance_id'] ?? 0);
 
       $rewardCents = (int)($b['reward_cents'] ?? 0);
-      $rPhone      = (int)($b['reward_phone_min'] ?? 0);
-      $rGames      = (int)($b['reward_games_min'] ?? 0);
 
       $claimedBy   = (int)($b['claimed_by_kid'] ?? 0);
       $kidId       = (int)($kid['kid_id'] ?? 0);
@@ -51,18 +77,12 @@ gb2_page_start('Bonuses', $kid);
           <div class="small">
             Reward:
             <?php if ($rewardCents > 0): ?>
-              $<?= number_format($rewardCents / 100, 2) ?>
+              <?= gb2_h(gb2_money($rewardCents)) ?>
             <?php endif; ?>
-            <?php if ($rPhone > 0): ?>
-              · +<?= (int)$rPhone ?> min phone
+            <?php if ($rewardCents <= 0): ?>
+              (no cash reward configured)
             <?php endif; ?>
-            <?php if ($rGames > 0): ?>
-              · +<?= (int)$rGames ?> min games
-            <?php endif; ?>
-            <?php if ($rewardCents <= 0 && $rPhone <= 0 && $rGames <= 0): ?>
-              (no reward configured)
-            <?php endif; ?>
-          </div>
+</div>
         </div>
 
         <div class="status <?= gb2_h($status) ?>"><?= gb2_h($status) ?></div>

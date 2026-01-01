@@ -43,6 +43,7 @@ function gb2_nav(string $active): void {
       ['key'=>'infractions','href'=>'/admin/infractions.php','label'=>'Infractions'],
       ['key'=>'inf_review','href'=>'/admin/infraction_review.php','label'=>'Inf Review'],
       ['key'=>'infraction_defs','href'=>'/admin/infraction_defs.php','label'=>'Defs'],
+      ['key'=>'bonus_defs','href'=>'/admin/bonus_defs.php','label'=>'Bonuses'],
       ['key'=>'rules','href'=>'/app/rules.php','label'=>'Rules'],
       ['key'=>'review','href'=>'/admin/review.php','label'=>'Review'],
       ['key'=>'setup','href'=>'/admin/setup.php','label'=>'Setup'],

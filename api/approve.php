@@ -176,10 +176,9 @@ try {
       if ($weekStart !== '' && $instanceId > 0) {
         $info = gb2_bonus_instance_info($pdo, $weekStart, $instanceId);
         if ($info) {
-          $rewardCents = (int)($info['reward_cents'] ?? 0);
-          $rewardPhone = (int)($info['reward_phone_min'] ?? 0);
-          $rewardGames = (int)($info['reward_games_min'] ?? 0);
+                    $rewardCents = (int)($info['reward_cents'] ?? 0);
 
+          // GB2 no longer uses banked device minutes for bonuses. Bonuses are cash-only incentives.
           if ($rewardCents !== 0) {
             gb2_ledger_add(
               $kidId,
@@ -190,12 +189,7 @@ try {
               (string)($info['title'] ?? 'Bonus'),
               'bonus:' . $instanceId
             );
-          }
-
-          if ($rewardPhone !== 0 || $rewardGames !== 0) {
-            gb2_priv_apply_bonus($kidId, $rewardPhone, $rewardGames);
-          }
-        } else {
+          }} else {
           gb2_approve_log('bonus_info_missing sub_id=' . $subId . ' week_start=' . $weekStart . ' instance_id=' . $instanceId);
         }
       }

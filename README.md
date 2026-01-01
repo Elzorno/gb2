@@ -55,3 +55,11 @@ Add:
 - Runtime files under `data/` are intentionally not committed.
 - Local editor backups (e.g. `*.bak.*`) and support bundles should not be committed.
 
+
+
+## Notes (Jan 2026)
+
+- **Rules page now includes a read-only weekly chore chart** (Mon–Fri + Weekend) for quick “at a glance” expectations.
+- **Bonuses are cash-only incentives.** GB2 no longer uses “banked device minutes” for bonus chores.
+  - Admin can edit bonus projects at **/admin/bonus_defs.php**.
+  - Kids can view their bonus earnings on **/app/bonuses.php** and a summary on their dashboard.

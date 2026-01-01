@@ -6,6 +6,7 @@ require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/db.php';
 require_once __DIR__ . '/../lib/rotation.php';
 require_once __DIR__ . '/../lib/privileges.php';
+require_once __DIR__ . '/../lib/ledger.php';
 
 gb2_db_init();
 $kid = gb2_kid_require();
@@ -24,6 +25,11 @@ if (function_exists('gb2_is_weekday') && gb2_is_weekday($dObj)) {
 }
 
 $priv = gb2_priv_get_for_kid((int)$kid['kid_id']);
+
+$kidId = (int)$kid['kid_id'];
+$weekStart = gb2_week_start_monday(new DateTimeImmutable('today'))->format('Y-m-d');
+$earnedWeek = gb2_ledger_sum_cents_for_kid($kidId, 'bonus_reward', $weekStart);
+$earnedAll  = gb2_ledger_sum_cents_for_kid($kidId, 'bonus_reward', null);
 
 function gb2_until_ts(string $iso): int {
   if ($iso === '') return 0;
@@ -102,10 +108,10 @@ gb2_page_start('Dashboard', $kid);
     </div>
 
     <div class="note" style="margin-top:10px">
-      Banked time — Phone <?= (int)$priv['bank_phone_min'] ?> min • Games <?= (int)$priv['bank_games_min'] ?> min • Other <?= (int)$priv['bank_other_min'] ?> min
+      Bonus earnings — This week <b><?= gb2_h(gb2_money($earnedWeek)) ?></b> • Total <b><?= gb2_h(gb2_money($earnedAll)) ?></b>
     </div>
 
-    <div class="note" style="margin-top:10px">
+<div class="note" style="margin-top:10px">
       Need help? A parent/guardian can unlock from <a href="/admin/login.php">Parent/Guardian</a>.
     </div>
   </div>
