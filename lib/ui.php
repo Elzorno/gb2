@@ -24,7 +24,7 @@ function gb2_flash_render(): void {
 /**
  * Keys used by pages:
  * - Kid: dashboard, today, bonuses, rules, history, logout
- * - Admin: admindash, family, grounding, infractions, inf_review, infraction_defs, bonus_defs, review, setup, kidview, branding
+ * - Admin: admindash, family, grounding, kidview, reviews, infractions, definitions, setup, branding, logout
  * - Logged out: login
  */
 function gb2_nav(string $active): void {
@@ -36,27 +36,25 @@ function gb2_nav(string $active): void {
 
   if ($admin) {
     $items = [
-      'Core' => [
-        ['key'=>'admindash','href'=>'/admin/dashboard.php','label'=>'Dashboard'],
-        ['key'=>'family','href'=>'/admin/family.php','label'=>'Family'],
-        ['key'=>'grounding','href'=>'/admin/grounding.php','label'=>'Privileges'],
-        ['key'=>'kidview','href'=>'/admin/kidview.php','label'=>'Kid View'],
-      ],
-      'Reviews' => [
-        ['key'=>'review','href'=>'/admin/review.php','label'=>'Bonus Review'],
-        ['key'=>'inf_review','href'=>'/admin/infraction_review.php','label'=>'Infraction Review'],
-        ['key'=>'infractions','href'=>'/admin/infractions.php','label'=>'Infraction Log'],
-      ],
-      'Definitions' => [
-        ['key'=>'bonus_defs','href'=>'/admin/bonus_defs.php','label'=>'Bonuses'],
-        ['key'=>'infraction_defs','href'=>'/admin/infraction_defs.php','label'=>'Infractions'],
-        ['key'=>'rules','href'=>'/app/rules.php','label'=>'Rules'],
-      ],
-      'Settings' => [
-        ['key'=>'branding','href'=>'/admin/branding.php','label'=>'Branding'],
-        ['key'=>'setup','href'=>'/admin/setup.php','label'=>'Setup'],
-        ['key'=>'logout','href'=>'/admin/logout.php','label'=>'Logout'],
-      ],
+    'Core' => [
+      ['key'=>'admindash','href'=>'/admin/dashboard.php','label'=>'Dashboard'],
+      ['key'=>'family','href'=>'/admin/family.php','label'=>'Family'],
+      ['key'=>'grounding','href'=>'/admin/grounding.php','label'=>'Privileges'],
+      ['key'=>'kidview','href'=>'/admin/kidview.php','label'=>'Kid View'],
+    ],
+    'Reviews' => [
+      ['key'=>'reviews','href'=>'/admin/reviews.php','label'=>'Reviews'],
+      ['key'=>'infractions','href'=>'/admin/infractions.php','label'=>'Infraction Log'],
+    ],
+    'Definitions' => [
+      ['key'=>'definitions','href'=>'/admin/definitions.php','label'=>'Definitions'],
+      ['key'=>'rules','href'=>'/app/rules.php','label'=>'Rules'],
+    ],
+    'Settings' => [
+      ['key'=>'branding','href'=>'/admin/branding.php','label'=>'Branding'],
+      ['key'=>'setup','href'=>'/admin/setup.php','label'=>'Setup'],
+      ['key'=>'logout','href'=>'/admin/logout.php','label'=>'Logout'],
+    ],
     ];
   } elseif ($kid) {
     $items = [
@@ -81,16 +79,33 @@ function gb2_nav(string $active): void {
   echo '<div class="nav-inline" role="navigation" aria-label="Primary">';
   foreach ($items as $group => $links) {
     foreach ($links as $it) {
-      $cls = ($it['key'] === $active) ? 'active' : '';
-      echo '<a class="'.$cls.'" href="'.gb2_h($it['href']).'"><div>•</div><div>'.gb2_h($it['label']).'</div></a>';
-    }
+  $cls = ($it['key'] === $active) ? 'active' : '';
+  if (($it['key'] ?? '') === 'logout') {
+    echo '<form class="nav-logout inline" method="post" action="/admin/logout.php">';
+    echo '<input type="hidden" name="_csrf" value="'.gb2_h(gb2_csrf_token()).'">';
+    echo '<button type="submit" class="'.$cls.'"><div>•</div><div>'.gb2_h($it['label']).'</div></button>';
+    echo '</form>';
+  } else {
+    echo '<a class="'.$cls.'" href="'.gb2_h($it['href']).'"><div>•</div><div>'.gb2_h($it['label']).'</div></a>';
   }
-  echo '</div>';
+}
+  }
+echo '</div>';
 
-  // Drawer nav (mobile)
-  echo '<div class="nav-drawer-wrap" id="gb2Nav" aria-hidden="true">';
+// Mobile "top actions" strip (admin only) to reduce reliance on the hamburger menu.
+if ($admin) {
+  echo '<div class="topactions" aria-label="Top actions">';
+  echo '<a href="/admin/dashboard.php" class="'.($active==='admindash'?'active':'').'">Dashboard</a>';
+  echo '<a href="/admin/grounding.php" class="'.($active==='grounding'?'active':'').'">Privileges</a>';
+  echo '<a href="/admin/reviews.php" class="'.($active==='reviews'?'active':'').'">Reviews</a>';
+  echo '<a href="/admin/definitions.php" class="'.($active==='definitions'?'active':'').'">Definitions</a>';
+  echo '</div>';
+}
+
+// Drawer nav (mobile)
+  echo '<div class="nav-drawer-wrap" id="gb2Nav" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Menu">';
   echo '  <div class="nav-backdrop" data-nav-close></div>';
-  echo '  <div class="nav-drawer" role="navigation" aria-label="Menu">';
+  echo '  <nav class="nav-drawer" aria-label="Menu">';
   echo '    <div class="nav-drawer-head">';
   echo '      <div class="nav-drawer-title">Menu</div>';
   echo '      <button type="button" class="navbtn" data-nav-close aria-label="Close menu">✕</button>';
@@ -100,13 +115,21 @@ function gb2_nav(string $active): void {
     echo '<div class="navgroup">';
     echo '<div class="navgroup-title">'.gb2_h($group).'</div>';
     foreach ($links as $it) {
-      $cls = ($it['key'] === $active) ? 'active' : '';
-      echo '<a class="'.$cls.'" href="'.gb2_h($it['href']).'">'.gb2_h($it['label']).'</a>';
-    }
+  $cls = ($it['key'] === $active) ? 'active' : '';
+  if (($it['key'] ?? '') === 'logout') {
+    // Logout via POST to avoid CSRF-able logouts.
+    echo '<form class="nav-logout" method="post" action="/admin/logout.php">';
+    echo '<input type="hidden" name="_csrf" value="'.gb2_h(gb2_csrf_token()).'">';
+    echo '<button type="submit" class="'.$cls.'">'.gb2_h($it['label']).'</button>';
+    echo '</form>';
+  } else {
+    echo '<a class="'.$cls.'" href="'.gb2_h($it['href']).'">'.gb2_h($it['label']).'</a>';
+  }
+}
     echo '</div>';
   }
   echo '    </div>';
-  echo '  </div>';
+  echo '  </nav>';
   echo '</div>';
 }
 
@@ -148,7 +171,7 @@ function gb2_page_start(string $title, ?array $kid = null): void {
 
   echo '<div class="topbar">';
   // Mobile menu button (drawer)
-  echo '<button type="button" class="navbtn navbtn-menu" data-nav-toggle aria-label="Open menu">☰</button>';
+  echo '<button type="button" class="navbtn navbtn-menu" data-nav-toggle aria-controls="gb2Nav" aria-expanded="false" aria-label="Open menu">☰</button>';
 
   echo '<div class="brand"><a href="'.gb2_h($brandHref).'">'.gb2_h($brand).'</a></div>';
   if ($family !== '') {
