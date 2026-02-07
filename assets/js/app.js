@@ -104,31 +104,93 @@ function confirmAction(msg){ return window.confirm(msg); }
 
   
   function bindNavDrawer(){
-    var wrap = document.getElementById('gb2Nav');
-    if (!wrap) return;
+  var wrap = document.getElementById('gb2Nav');
+  if (!wrap) return;
 
-    function open(){
-      wrap.classList.add('open');
-      wrap.setAttribute('aria-hidden','false');
-      document.documentElement.classList.add('nav-open');
-    }
-    function close(){
-      wrap.classList.remove('open');
-      wrap.setAttribute('aria-hidden','true');
-      document.documentElement.classList.remove('nav-open');
-    }
+  var toggles = Array.prototype.slice.call(document.querySelectorAll('[data-nav-toggle]'));
+  var lastFocus = null;
 
-    document.querySelectorAll('[data-nav-toggle]').forEach(function(btn){
-      btn.addEventListener('click', function(e){ e.preventDefault(); open(); });
-    });
-    wrap.querySelectorAll('[data-nav-close]').forEach(function(el){
-      el.addEventListener('click', function(e){ e.preventDefault(); close(); });
-    });
-
-    document.addEventListener('keydown', function(e){
-      if (e.key === 'Escape') close();
+  function setExpanded(v){
+    toggles.forEach(function(btn){
+      try { btn.setAttribute('aria-expanded', v ? 'true' : 'false'); } catch(e){}
     });
   }
+
+  function focusables(){
+    return Array.prototype.slice.call(
+      wrap.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')
+    ).filter(function(el){
+      return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+    });
+  }
+
+  function open(){
+    if (wrap.classList.contains('open')) return;
+    lastFocus = document.activeElement;
+
+    wrap.classList.add('open');
+    wrap.setAttribute('aria-hidden','false');
+    document.documentElement.classList.add('nav-open');
+    setExpanded(true);
+
+    // Focus first meaningful control in the drawer.
+    var f = focusables();
+    if (f.length) f[0].focus();
+  }
+
+  function close(){
+    if (!wrap.classList.contains('open')) return;
+
+    wrap.classList.remove('open');
+    wrap.setAttribute('aria-hidden','true');
+    document.documentElement.classList.remove('nav-open');
+    setExpanded(false);
+
+    if (lastFocus && typeof lastFocus.focus === 'function') {
+      try { lastFocus.focus(); } catch(e){}
+    }
+    lastFocus = null;
+  }
+
+  toggles.forEach(function(btn){
+    btn.addEventListener('click', function(e){ e.preventDefault(); open(); });
+  });
+
+  wrap.querySelectorAll('[data-nav-close]').forEach(function(el){
+    el.addEventListener('click', function(e){ e.preventDefault(); close(); });
+  });
+
+  document.addEventListener('keydown', function(e){
+    if (!wrap.classList.contains('open')) return;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+      return;
+    }
+
+    // Basic focus trap when drawer is open.
+    if (e.key === 'Tab') {
+      var f = focusables();
+      if (!f.length) return;
+
+      var first = f[0];
+      var last  = f[f.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === first || !wrap.contains(document.activeElement)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  });
+}
 
 // Kick off common behaviors
   tickCountdowns();
