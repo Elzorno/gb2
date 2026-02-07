@@ -220,7 +220,7 @@ $repairsLines = $repairs ? implode("\n", array_map('strval', $repairs)) : '';
   <div class="h1"><?= $edit ? 'Edit Definition' : 'Create Definition' ?></div>
   <div style="height:10px"></div>
 
-  <div class="grid">
+  <div class="grid auto">
     <label>
       Code (unique)
       <input class="input" type="text" name="code" value="<?= gb2_h((string)($e['code'] ?? '')) ?>">
@@ -233,7 +233,7 @@ $repairsLines = $repairs ? implode("\n", array_map('strval', $repairs)) : '';
 
   <div style="height:10px"></div>
 
-  <div class="grid">
+  <div class="grid auto">
     <label class="check">
       <input type="checkbox" name="active" <?= ((int)($e['active'] ?? 0) === 1) ? 'checked' : '' ?>>
       Active
@@ -255,7 +255,7 @@ $repairsLines = $repairs ? implode("\n", array_map('strval', $repairs)) : '';
 
   <div style="height:10px"></div>
 
-  <div class="grid">
+  <div class="grid auto">
     <label>
       Days (default)
       <input class="input" type="number" min="0" max="365" name="days" value="<?= (int)($e['days'] ?? 0) ?>">
@@ -272,7 +272,7 @@ $repairsLines = $repairs ? implode("\n", array_map('strval', $repairs)) : '';
 
   <div style="height:10px"></div>
 
-  <div class="grid">
+  <div class="grid auto">
     <label class="check">
       <input type="checkbox" name="blocks[phone]" <?= gb2_blocks_checked($blocks, 'phone') ?>>
       Block phone

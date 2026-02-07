@@ -84,6 +84,10 @@ function gb2_kid_login(int $kidId, string $pin): bool {
   $cfg = gb2_config();
   $cookieName = (string)($cfg['session']['kid_device_cookie'] ?? 'gb2_dev');
   $days = (int)($cfg['session']['kid_session_days'] ?? 30);
+  $secure = $cfg['session']['cookie_secure'] ?? null;
+  if (!is_bool($secure)) {
+    $secure = gb2_is_https();
+  }
 
   $raw = random_bytes(32);
   $token = bin2hex($raw);
@@ -97,7 +101,7 @@ function gb2_kid_login(int $kidId, string $pin): bool {
     'expires' => time() + ($days*86400),
     'path' => '/',
     'httponly' => true,
-    'secure' => false,
+    'secure' => $secure,
     'samesite' => 'Strict',
   ]);
 
@@ -108,6 +112,10 @@ function gb2_kid_login(int $kidId, string $pin): bool {
 function gb2_kid_logout(): void {
   $cfg = gb2_config();
   $cookieName = (string)($cfg['session']['kid_device_cookie'] ?? 'gb2_dev');
+  $secure = $cfg['session']['cookie_secure'] ?? null;
+  if (!is_bool($secure)) {
+    $secure = gb2_is_https();
+  }
   if (!empty($_COOKIE[$cookieName])) {
     $token = (string)$_COOKIE[$cookieName];
     if (preg_match('/^[A-Fa-f0-9]{64}$/', $token)) {
@@ -120,7 +128,7 @@ function gb2_kid_logout(): void {
       }
     }
   }
-  setcookie($cookieName, '', ['expires'=>time()-3600,'path'=>'/','httponly'=>true,'secure'=>false,'samesite'=>'Strict']);
+  setcookie($cookieName, '', ['expires'=>time()-3600,'path'=>'/','httponly'=>true,'secure'=>$secure,'samesite'=>'Strict']);
 }
 
 function gb2_admin_current(): bool {

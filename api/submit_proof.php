@@ -11,6 +11,14 @@ $kid = gb2_kid_require();
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') { http_response_code(405); exit; }
 gb2_csrf_verify();
 
+$kind = (string)($_POST['kind'] ?? '');
+
+function gb2_submit_proof_redirect(string $kind, string $err): void {
+  $path = ($kind === 'bonus') ? '/app/bonuses.php' : '/app/today.php';
+  header('Location: ' . $path . '?err=' . urlencode($err));
+  exit;
+}
+
 $cfg = gb2_config();
 $maxBytes = (int)($cfg['uploads']['max_bytes'] ?? (7*1024*1024));
 $noPhoto  = ((string)($_POST['no_photo'] ?? '')) === '1';
@@ -35,12 +43,16 @@ if ($noPhoto) {
   $field = gb2_pick_upload_field();
 
   if (empty($_FILES[$field]) || ($_FILES[$field]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-    http_response_code(400); echo "Upload failed."; exit;
+    gb2_submit_proof_redirect($kind, 'Upload failed. Please try again.');
   }
-  if ((int)($_FILES[$field]['size'] ?? 0) > $maxBytes) { http_response_code(413); echo "File too large."; exit; }
+  if ((int)($_FILES[$field]['size'] ?? 0) > $maxBytes) {
+    gb2_submit_proof_redirect($kind, 'File too large. Please choose a smaller photo.');
+  }
 
   $tmp = (string)($_FILES[$field]['tmp_name'] ?? '');
-  if ($tmp === '' || !is_file($tmp)) { http_response_code(400); echo "Upload failed."; exit; }
+  if ($tmp === '' || !is_file($tmp)) {
+    gb2_submit_proof_redirect($kind, 'Upload failed. Please try again.');
+  }
 
   $mime = '';
   if (class_exists('finfo')) {
@@ -49,7 +61,7 @@ if ($noPhoto) {
   }
   if (!$mime) $mime = (string)(mime_content_type($tmp) ?: '');
   if (!in_array($mime, ['image/jpeg','image/png','image/heic','image/heif','image/webp'], true)) {
-    http_response_code(400); echo "Unsupported image type."; exit;
+    gb2_submit_proof_redirect($kind, 'Unsupported image type. Use JPEG, PNG, HEIC, or WEBP.');
   }
 
   $upDir = rtrim($dataDir,'/') . '/uploads/' . date('Y') . '/' . date('m');
@@ -63,12 +75,13 @@ if ($noPhoto) {
   $fname = bin2hex(random_bytes(16)) . '.' . $ext;
   $destAbs = $upDir . '/' . $fname;
 
-  if (!move_uploaded_file($tmp, $destAbs)) { http_response_code(500); echo "Save failed."; exit; }
+  if (!move_uploaded_file($tmp, $destAbs)) {
+    gb2_submit_proof_redirect($kind, 'Could not save photo. Please try again.');
+  }
 
   $photoRel = ltrim(str_replace(rtrim($dataDir,'/').'/', '', $destAbs), '/');
 }
 
-$kind = (string)($_POST['kind'] ?? '');
 $pdo = gb2_pdo();
 
 if ($kind === 'base') {
@@ -118,5 +131,4 @@ if ($kind === 'bonus') {
   exit;
 }
 
-http_response_code(400);
-echo "Bad request.";
+gb2_submit_proof_redirect($kind, 'Bad request.');

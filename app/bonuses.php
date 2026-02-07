@@ -13,14 +13,9 @@ $kid = gb2_kid_require();
 $today    = (new DateTimeImmutable('today'))->format('Y-m-d');
 $weekStart = gb2_bonus_week_start($today);
 
-// Ensure weekly instances exist
+// Ensure weekly instances exist (idempotent + concurrency-safe).
 $pdo = gb2_pdo();
-$st = $pdo->prepare("SELECT COUNT(*) as c FROM bonus_instances WHERE week_start=?");
-$st->execute([$weekStart]);
-$c = (int)($st->fetch()['c'] ?? 0);
-if ($c === 0) {
-  gb2_bonus_reset_week($weekStart);
-}
+gb2_bonus_ensure_week_instances($pdo, $weekStart);
 
 $list = gb2_bonus_list_week($weekStart);
 
