@@ -14,63 +14,100 @@ function gb2_flash_render(): void {
   $err = isset($_GET['err']) ? trim((string)$_GET['err']) : '';
 
   if ($ok !== '') {
-    echo '<div class="status approved" style="margin-top:12px">' . gb2_h($ok) . '</div>';
+    echo '<div class="flash ok">'.gb2_h($ok).'</div>';
   }
   if ($err !== '') {
-    echo '<div class="status rejected" style="margin-top:12px">' . gb2_h($err) . '</div>';
+    echo '<div class="flash err">'.gb2_h($err).'</div>';
   }
 }
 
 /**
- * Bottom navigation: kid + admin share one consistent UI.
- *
  * Keys used by pages:
  * - Kid: dashboard, today, bonuses, rules, history, logout
- * - Admin: admindash, family, grounding, infractions, inf_review, infraction_defs, rules, review, setup, kidview, lock
+ * - Admin: admindash, family, grounding, infractions, inf_review, infraction_defs, bonus_defs, review, setup, kidview, branding
  * - Logged out: login
  */
 function gb2_nav(string $active): void {
   $kid   = gb2_kid_current();
   $admin = gb2_admin_current();
 
+  // Build nav items. Keep labels short (mobile), but still explicit.
   $items = [];
 
   if ($admin) {
     $items = [
-      ['key'=>'admindash','href'=>'/admin/dashboard.php','label'=>'Dashboard'],
-      ['key'=>'family','href'=>'/admin/family.php','label'=>'Family'],
-      ['key'=>'grounding','href'=>'/admin/grounding.php','label'=>'Privileges'],
-      ['key'=>'infractions','href'=>'/admin/infractions.php','label'=>'Infractions'],
-      ['key'=>'inf_review','href'=>'/admin/infraction_review.php','label'=>'Inf Review'],
-      ['key'=>'infraction_defs','href'=>'/admin/infraction_defs.php','label'=>'Defs'],
-      ['key'=>'bonus_defs','href'=>'/admin/bonus_defs.php','label'=>'Bonuses'],
-      ['key'=>'rules','href'=>'/app/rules.php','label'=>'Rules'],
-      ['key'=>'review','href'=>'/admin/review.php','label'=>'Review'],
-      ['key'=>'setup','href'=>'/admin/setup.php','label'=>'Setup'],
-      ['key'=>'kidview','href'=>'/admin/kidview.php','label'=>'Kid View'],
-      ['key'=>'lock','href'=>'/admin/logout.php','label'=>'Lock'],
+      'Core' => [
+        ['key'=>'admindash','href'=>'/admin/dashboard.php','label'=>'Dashboard'],
+        ['key'=>'family','href'=>'/admin/family.php','label'=>'Family'],
+        ['key'=>'grounding','href'=>'/admin/grounding.php','label'=>'Privileges'],
+        ['key'=>'kidview','href'=>'/admin/kidview.php','label'=>'Kid View'],
+      ],
+      'Reviews' => [
+        ['key'=>'review','href'=>'/admin/review.php','label'=>'Bonus Review'],
+        ['key'=>'inf_review','href'=>'/admin/infraction_review.php','label'=>'Infraction Review'],
+        ['key'=>'infractions','href'=>'/admin/infractions.php','label'=>'Infraction Log'],
+      ],
+      'Definitions' => [
+        ['key'=>'bonus_defs','href'=>'/admin/bonus_defs.php','label'=>'Bonuses'],
+        ['key'=>'infraction_defs','href'=>'/admin/infraction_defs.php','label'=>'Infractions'],
+        ['key'=>'rules','href'=>'/app/rules.php','label'=>'Rules'],
+      ],
+      'Settings' => [
+        ['key'=>'branding','href'=>'/admin/branding.php','label'=>'Branding'],
+        ['key'=>'setup','href'=>'/admin/setup.php','label'=>'Setup'],
+        ['key'=>'logout','href'=>'/admin/logout.php','label'=>'Logout'],
+      ],
     ];
   } elseif ($kid) {
     $items = [
-      ['key'=>'dashboard','href'=>'/app/dashboard.php','label'=>'Dashboard'],
-      ['key'=>'today','href'=>'/app/today.php','label'=>'Today'],
-      ['key'=>'bonuses','href'=>'/app/bonuses.php','label'=>'Bonuses'],
-      ['key'=>'rules','href'=>'/app/rules.php','label'=>'Rules'],
-      ['key'=>'history','href'=>'/app/history.php','label'=>'History'],
-      ['key'=>'logout','href'=>'/app/logout.php','label'=>'Log out'],
+      'Kid' => [
+        ['key'=>'dashboard','href'=>'/app/dashboard.php','label'=>'Dashboard'],
+        ['key'=>'today','href'=>'/app/today.php','label'=>'Today'],
+        ['key'=>'bonuses','href'=>'/app/bonuses.php','label'=>'Bonuses'],
+        ['key'=>'rules','href'=>'/app/rules.php','label'=>'Rules'],
+        ['key'=>'history','href'=>'/app/history.php','label'=>'History'],
+        ['key'=>'logout','href'=>'/app/logout.php','label'=>'Logout'],
+      ],
     ];
   } else {
     $items = [
-      ['key'=>'login','href'=>'/app/login.php','label'=>'Kid Login'],
+      'Login' => [
+        ['key'=>'login','href'=>'/app/login.php','label'=>'Login'],
+      ],
     ];
   }
 
-  echo '<div class="nav"><div class="wrap">';
-  foreach ($items as $it) {
-    $cls = ($it['key'] === $active) ? 'active' : '';
-    echo '<a class="'.$cls.'" href="'.gb2_h($it['href']).'"><div>•</div><div>'.gb2_h($it['label']).'</div></a>';
+  // Inline nav (desktop/tablet)
+  echo '<div class="nav-inline" role="navigation" aria-label="Primary">';
+  foreach ($items as $group => $links) {
+    foreach ($links as $it) {
+      $cls = ($it['key'] === $active) ? 'active' : '';
+      echo '<a class="'.$cls.'" href="'.gb2_h($it['href']).'"><div>•</div><div>'.gb2_h($it['label']).'</div></a>';
+    }
   }
-  echo '</div></div>';
+  echo '</div>';
+
+  // Drawer nav (mobile)
+  echo '<div class="nav-drawer-wrap" id="gb2Nav" aria-hidden="true">';
+  echo '  <div class="nav-backdrop" data-nav-close></div>';
+  echo '  <div class="nav-drawer" role="navigation" aria-label="Menu">';
+  echo '    <div class="nav-drawer-head">';
+  echo '      <div class="nav-drawer-title">Menu</div>';
+  echo '      <button type="button" class="navbtn" data-nav-close aria-label="Close menu">✕</button>';
+  echo '    </div>';
+  echo '    <div class="nav-drawer-body">';
+  foreach ($items as $group => $links) {
+    echo '<div class="navgroup">';
+    echo '<div class="navgroup-title">'.gb2_h($group).'</div>';
+    foreach ($links as $it) {
+      $cls = ($it['key'] === $active) ? 'active' : '';
+      echo '<a class="'.$cls.'" href="'.gb2_h($it['href']).'">'.gb2_h($it['label']).'</a>';
+    }
+    echo '</div>';
+  }
+  echo '    </div>';
+  echo '  </div>';
+  echo '</div>';
 }
 
 /**
@@ -79,6 +116,10 @@ function gb2_nav(string $active): void {
 function gb2_page_start(string $title, ?array $kid = null): void {
   gb2_secure_headers();
   gb2_session_start();
+
+  $cfg = gb2_config();
+  $brand = (string)($cfg['branding']['brand'] ?? 'GB2');
+  $family = trim((string)($cfg['branding']['family'] ?? ''));
 
   $admin = gb2_admin_current();
   $brandHref = $admin ? '/admin/dashboard.php' : '/app/dashboard.php';
@@ -92,11 +133,11 @@ function gb2_page_start(string $title, ?array $kid = null): void {
       $isImpersonating = true;
       $who = 'Parent/Guardian • Viewing: ' . (string)($kid['name'] ?? ('Kid #' . (int)$kid['kid_id']));
     }
-  } elseif ($kid && isset($kid['name'])) {
-    $who = 'Kid: ' . (string)$kid['name'];
+  } elseif ($kid) {
+    $who = (string)($kid['name'] ?? 'Kid');
   }
 
-  $req = (string)($_SERVER['REQUEST_URI'] ?? '');
+  $req = (string)($_SERVER['REQUEST_URI'] ?? '/');
   $nextEnc = rawurlencode($req);
 
   echo '<!doctype html><html><head><meta charset="utf-8">';
@@ -106,20 +147,25 @@ function gb2_page_start(string $title, ?array $kid = null): void {
   echo '</head><body><div class="container">';
 
   echo '<div class="topbar">';
-  echo '<div class="brand"><a href="'.gb2_h($brandHref).'">GB2</a></div>';
-  echo '<div class="brand" style="margin-left:10px">'.gb2_h($title).'</div>';
+  // Mobile menu button (drawer)
+  echo '<button type="button" class="navbtn navbtn-menu" data-nav-toggle aria-label="Open menu">☰</button>';
+
+  echo '<div class="brand"><a href="'.gb2_h($brandHref).'">'.gb2_h($brand).'</a></div>';
+  if ($family !== '') {
+    echo '<div class="brand family">'.gb2_h($family).'</div>';
+  }
+  echo '<div class="pagetitle">'.gb2_h($title).'</div>';
 
   // Kid pages: always show a Parent/Guardian login link so you don't have to log kid out.
   if (!$admin) {
-    echo '<div class="row" style="gap:10px; margin-left:auto; align-items:center">';
-    echo '<a class="btn" style="height:36px; padding:0 12px; border-radius:12px" href="/admin/login.php?next='.$nextEnc.'">Parent/Guardian</a>';
-    if ($who) echo '<div class="badge">'.gb2_h($who).'</div>';
-    echo '</div>';
+    echo '<div class="spacer"></div>';
+    echo '<a class="btn" style="height:36px; padding:0 12px; display:flex; align-items:center" href="/admin/login.php?next='.$nextEnc.'">Parent Login</a>';
   } else {
+    echo '<div class="spacer"></div>';
     if ($who) echo '<div class="badge">'.gb2_h($who).'</div>';
     // When impersonating, add a quick exit link back to Kid View hub.
     if ($isImpersonating) {
-      echo '<a class="btn" style="height:36px; padding:0 12px; border-radius:12px; margin-left:10px" href="/admin/kidview.php">Switch kid</a>';
+      echo '<a class="btn" style="height:36px; padding:0 12px; display:flex; align-items:center; margin-left:10px" href="/admin/kidview.php">Switch kid</a>';
     }
   }
 

@@ -102,9 +102,38 @@ function confirmAction(msg){ return window.confirm(msg); }
     });
   }
 
-  // Kick off common behaviors
+  
+  function bindNavDrawer(){
+    var wrap = document.getElementById('gb2Nav');
+    if (!wrap) return;
+
+    function open(){
+      wrap.classList.add('open');
+      wrap.setAttribute('aria-hidden','false');
+      document.documentElement.classList.add('nav-open');
+    }
+    function close(){
+      wrap.classList.remove('open');
+      wrap.setAttribute('aria-hidden','true');
+      document.documentElement.classList.remove('nav-open');
+    }
+
+    document.querySelectorAll('[data-nav-toggle]').forEach(function(btn){
+      btn.addEventListener('click', function(e){ e.preventDefault(); open(); });
+    });
+    wrap.querySelectorAll('[data-nav-close]').forEach(function(el){
+      el.addEventListener('click', function(e){ e.preventDefault(); close(); });
+    });
+
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape') close();
+    });
+  }
+
+// Kick off common behaviors
   tickCountdowns();
   setInterval(tickCountdowns, 1000);
 
   bindInfractionPreviews();
+  bindNavDrawer();
 })();

@@ -35,10 +35,6 @@ gb2_page_start('Today', $kid);
     <div class="note" style="margin-top:10px">Check Bonuses for optional tasks.</div>
   <?php else: ?>
 
-    <?php if (!$items): ?>
-      <div class="note" style="margin-top:12px">No weekday chores are assigned for today.</div>
-    <?php endif; ?>
-
     <?php foreach ($items as $it): ?>
       <?php
         $slotTitle = (string)($it['slot_title'] ?? 'Chore');

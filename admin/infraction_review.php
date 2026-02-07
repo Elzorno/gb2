@@ -212,7 +212,7 @@ function render_events(string $title, array $rows, string $tok): void {
               <input type="hidden" name="_csrf" value="<?= gb2_h($tok) ?>">
               <input type="hidden" name="event_id" value="<?= (int)$r['id'] ?>">
 
-              <div class="grid auto">
+              <div class="grid">
                 <label>
                   Action
                   <select class="input" name="action">

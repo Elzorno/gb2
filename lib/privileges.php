@@ -285,3 +285,21 @@ function gb2_priv_add_lock_minutes(int $kidId, string $which, int $minutes): str
 
   return $newUntilIso;
 }
+
+/**
+ * Extend any currently-active locks for a kid by N minutes.
+ * - Only affects locks where *_locked = 1
+ * - If a lock is active but has no until timestamp, it will set one.
+ * - Does nothing for unlocked privileges.
+ */
+function gb2_priv_extend_all_locked(int $kidId, int $minutes): void {
+  $row = gb2_priv_get_for_kid($kidId);
+
+  $phoneLocked = (int)($row['phone_locked'] ?? 0);
+  $gamesLocked = (int)($row['games_locked'] ?? 0);
+  $otherLocked = (int)($row['other_locked'] ?? 0);
+
+  if ($phoneLocked === 1) gb2_priv_add_lock_minutes($kidId, 'phone', $minutes);
+  if ($gamesLocked === 1) gb2_priv_add_lock_minutes($kidId, 'games', $minutes);
+  if ($otherLocked === 1) gb2_priv_add_lock_minutes($kidId, 'other', $minutes);
+}

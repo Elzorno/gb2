@@ -12,42 +12,14 @@ function gb2_bonus_week_start(string $dayYmd): string {
 function gb2_bonus_reset_week(string $weekStartYmd): void {
   gb2_db_init();
   $pdo = gb2_pdo();
-  gb2_bonus_ensure_week_instances($pdo, $weekStartYmd);
-}
-
-/**
- * Ensure a week has the configured number of instances per active bonus.
- * Uses an IMMEDIATE transaction so concurrent requests cannot double-insert.
- */
-function gb2_bonus_ensure_week_instances(PDO $pdo, string $weekStartYmd): void {
-  $pdo->exec('BEGIN IMMEDIATE');
-  try {
-    $defs = $pdo->query("SELECT id, max_per_week FROM bonus_defs WHERE active=1 ORDER BY sort_order ASC, id ASC")->fetchAll();
-    $countSt = $pdo->prepare("SELECT COUNT(*) FROM bonus_instances WHERE week_start=? AND bonus_def_id=?");
-    $insertSt = $pdo->prepare("INSERT INTO bonus_instances(week_start,bonus_def_id,status) VALUES(?,?,?)");
-
-    foreach ($defs as $def) {
-      $defId = (int)$def['id'];
-      $max = max(1, (int)$def['max_per_week']);
-
-      $countSt->execute([$weekStartYmd, $defId]);
-      $have = (int)$countSt->fetchColumn();
-      $missing = $max - $have;
-      if ($missing <= 0) {
-        continue;
-      }
-
-      for ($i = 0; $i < $missing; $i++) {
-        $insertSt->execute([$weekStartYmd, $defId, 'available']);
-      }
+  $defs = $pdo->query("SELECT * FROM bonus_defs WHERE active=1 ORDER BY sort_order ASC, id ASC")->fetchAll();
+  foreach ($defs as $def) {
+    $defId = (int)$def['id'];
+    $max = max(1, (int)$def['max_per_week']);
+    for ($i=0; $i<$max; $i++) {
+      $pdo->prepare("INSERT INTO bonus_instances(week_start,bonus_def_id,status) VALUES(?,?,?)")
+          ->execute([$weekStartYmd, $defId, 'available']);
     }
-
-    $pdo->commit();
-  } catch (Throwable $e) {
-    if ($pdo->inTransaction()) {
-      $pdo->rollBack();
-    }
-    throw $e;
   }
 }
 

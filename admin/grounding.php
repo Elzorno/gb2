@@ -16,20 +16,28 @@ $kids = gb2_kids_all();
 $flash = '';
 $err = '';
 
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   try {
     gb2_csrf_verify();
 
     $kidId = (int)($_POST['kid_id'] ?? 0);
     if ($kidId <= 0) throw new RuntimeException('Missing kid_id');
 
-    $phone_locked = isset($_POST['phone_locked']) ? 1 : 0;
-    $games_locked = isset($_POST['games_locked']) ? 1 : 0;
-    $other_locked = isset($_POST['other_locked']) ? 1 : 0;
+    // Action routing (default = save)
+    $action = (string)($_POST['action'] ?? 'save');
 
-    gb2_priv_set_locks($kidId, $phone_locked, $games_locked, $other_locked);
+    if ($action === 'extend24') {
+      // Extend any currently active locks by 24 hours.
+      gb2_priv_extend_all_locked($kidId, 24 * 60);
+      $flash = 'Extended active locks by 24 hours.';
+    } else {
+      $phone_locked = isset($_POST['phone_locked']) ? 1 : 0;
+      $games_locked = isset($_POST['games_locked']) ? 1 : 0;
+      $other_locked = isset($_POST['other_locked']) ? 1 : 0;
 
-    $flash = 'Saved.';
+      gb2_priv_set_locks($kidId, $phone_locked, $games_locked, $other_locked);
+      $flash = 'Saved.';
+    }
   } catch (Throwable $e) {
     $err = $e->getMessage();
   }
@@ -47,7 +55,6 @@ gb2_page_start('Privileges');
   <?php if ($flash): ?>
     <div class="status approved" style="margin-top:12px"><?= gb2_h($flash) ?></div>
   <?php endif; ?>
-
   <?php if ($err): ?>
     <div class="status rejected" style="margin-top:12px"><?= gb2_h($err) ?></div>
   <?php endif; ?>
@@ -59,6 +66,11 @@ gb2_page_start('Privileges');
     if ($kidId <= 0) continue;
     $pv = gb2_priv_get_for_kid($kidId);
     $name = (string)($k['name'] ?? ('Kid #' . $kidId));
+
+    $hasActive =
+      ((int)($pv['phone_locked'] ?? 0) === 1) ||
+      ((int)($pv['games_locked'] ?? 0) === 1) ||
+      ((int)($pv['other_locked'] ?? 0) === 1);
   ?>
   <div class="card" style="margin-top:12px">
     <div class="h2"><?= gb2_h($name) ?></div>
@@ -83,7 +95,16 @@ gb2_page_start('Privileges');
       </div>
 
       <div style="height:12px"></div>
-      <button class="btn primary" type="submit">Save</button>
+
+      <div class="row" style="gap:10px; flex-wrap:wrap">
+        <button class="btn primary" type="submit" name="action" value="save">Save</button>
+        <button class="btn" type="submit" name="action" value="extend24" <?= $hasActive ? '' : 'disabled' ?>>
+          +24h active locks
+        </button>
+      </div>
+      <?php if (!$hasActive): ?>
+        <div class="note" style="margin-top:8px">No active locks to extend.</div>
+      <?php endif; ?>
     </form>
   </div>
 <?php endforeach; ?>

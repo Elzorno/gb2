@@ -105,7 +105,7 @@ $tok = gb2_csrf_token();
       <input type="hidden" name="_csrf" value="<?= gb2_h($tok) ?>">
       <input type="hidden" name="kid_id" value="<?= $kidId ?>">
 
-      <div class="grid auto">
+      <div class="grid">
         <label>
           Infraction
           <select class="input inf-select" id="<?= gb2_h($selectId) ?>" data-kid="<?= $kidId ?>" <?= $defs ? '' : 'disabled' ?> name="infraction_def_id">

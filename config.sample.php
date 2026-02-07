@@ -8,6 +8,15 @@ return [
   // Admin password hash (Argon2id). Set via /admin/setup.php or CLI helper.
   'admin_password_hash' => '',
 
+  // Branding / titles
+  'branding' => [
+    // Short brand shown in header
+    'brand' => 'GB2',
+    // Optional family name shown next to brand (e.g., "Zornes Family")
+    'family' => '',
+  ],
+
+
   // Session settings
   'session' => [
     'cookie_name' => 'gb2_sess',
